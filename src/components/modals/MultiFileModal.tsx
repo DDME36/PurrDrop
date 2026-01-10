@@ -20,12 +20,15 @@ export function MultiFileModal({ show, fileCount, totalSize, onZip, onSeparate, 
         <div className="modal-icon">📦</div>
         <div className="modal-title">ส่งหลายไฟล์</div>
         <div className="modal-file">{fileCount} ไฟล์ ({formatFileSize(totalSize)})</div>
+        <div className="modal-hint" style={{ fontSize: '12px', color: '#8b7b73', marginTop: '8px' }}>
+          แนะนำ: รวมเป็น ZIP จะส่งง่ายกว่า
+        </div>
         <div className="modal-actions-vertical">
           <button className="btn btn-accept" onClick={onZip}>
-            📦 รวมเป็น ZIP
+            📦 รวมเป็น ZIP (แนะนำ)
           </button>
           <button className="btn btn-pastel" onClick={onSeparate}>
-            📄 ส่งทีละไฟล์
+            📄 ส่งทีละไฟล์ (ต้องกดรับทุกไฟล์)
           </button>
           <button className="btn btn-reject" onClick={onCancel}>
             ยกเลิก

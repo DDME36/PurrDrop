@@ -241,16 +241,21 @@ export default function Home() {
 
   // Handle multi-file selection
   const handleMultiFiles = useCallback(async (files: File[], peer: Peer) => {
-    if (files.length < 2) {
+    console.log('handleMultiFiles called with', files.length, 'files');
+    
+    if (files.length === 0) return;
+    
+    if (files.length === 1) {
       // Single file - send directly
       sendFile(peer, files[0]);
       play('whoosh');
       return;
     }
 
-    // Multiple files - show options
+    // Multiple files - show options modal
+    console.log('Showing multi-file modal');
     selectedPeerRef.current = peer;
-    setPendingMultiFiles(files);
+    setPendingMultiFiles([...files]); // Copy array
     setShowMultiFileModal(true);
   }, [sendFile, play]);
 
@@ -272,13 +277,25 @@ export default function Home() {
     setPendingMultiFiles([]);
   }, [pendingMultiFiles, createZipFile, sendFile, sendFilesSequentially, play]);
 
-  const handleMultiFileSeparate = useCallback(() => {
+  const handleMultiFileSeparate = useCallback(async () => {
     setShowMultiFileModal(false);
     if (!selectedPeerRef.current || pendingMultiFiles.length === 0) return;
     
-    sendFilesSequentially(pendingMultiFiles, selectedPeerRef.current);
+    const peer = selectedPeerRef.current;
+    const files = [...pendingMultiFiles];
     setPendingMultiFiles([]);
-  }, [pendingMultiFiles, sendFilesSequentially]);
+    
+    // Send all files - each will need to be accepted by receiver
+    // But we'll send them all at once, receiver will get multiple offers
+    toastRef.current?.show(`กำลังส่ง ${files.length} ไฟล์...`, 'info');
+    
+    for (const file of files) {
+      sendFile(peer, file);
+      // Small delay between sends to avoid overwhelming
+      await new Promise(r => setTimeout(r, 100));
+    }
+    play('whoosh');
+  }, [pendingMultiFiles, sendFile, play]);
 
   const handleMultiFileCancel = useCallback(() => {
     setShowMultiFileModal(false);
