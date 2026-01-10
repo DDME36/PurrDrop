@@ -7,7 +7,7 @@ interface PeersGridProps {
   peers: Peer[];
   newPeerIds: Set<string>;
   onSelectPeer: (peer: Peer) => void;
-  onDropFiles: (peer: Peer, files: FileList) => void;
+  onDropFiles: (peer: Peer, files: File[]) => void;
 }
 
 export function PeersGrid({ peers, newPeerIds, onSelectPeer, onDropFiles }: PeersGridProps) {

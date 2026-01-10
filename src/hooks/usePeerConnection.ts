@@ -14,6 +14,7 @@ interface FileOffer {
 interface TransferProgress {
   peerId: string;
   fileName: string;
+  fileSize: number;
   progress: number;
   status: 'sending' | 'receiving' | 'complete' | 'error';
 }
@@ -115,6 +116,7 @@ export function usePeerConnection() {
             setTransfer({
               peerId,
               fileName: msg.name,
+              fileSize: msg.size,
               progress: 0,
               status: 'receiving',
             });
@@ -197,6 +199,7 @@ export function usePeerConnection() {
     setTransfer({
       peerId,
       fileName: file.name,
+      fileSize: file.size,
       progress: 0,
       status: 'sending',
     });

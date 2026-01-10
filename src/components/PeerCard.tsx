@@ -7,7 +7,68 @@ interface PeerCardProps {
   peer: Peer;
   isNew?: boolean;
   onSelect: (peer: Peer) => void;
-  onDrop: (peer: Peer, files: FileList) => void;
+  onDrop: (peer: Peer, files: File[]) => void;
+}
+
+// Recursively get all files from a directory entry
+async function getFilesFromEntry(entry: FileSystemEntry): Promise<File[]> {
+  if (entry.isFile) {
+    return new Promise((resolve) => {
+      (entry as FileSystemFileEntry).file((file) => {
+        resolve([file]);
+      }, () => resolve([]));
+    });
+  } else if (entry.isDirectory) {
+    const dirReader = (entry as FileSystemDirectoryEntry).createReader();
+    const files: File[] = [];
+    
+    const readEntries = (): Promise<File[]> => {
+      return new Promise((resolve) => {
+        dirReader.readEntries(async (entries) => {
+          if (entries.length === 0) {
+            resolve(files);
+          } else {
+            for (const e of entries) {
+              const subFiles = await getFilesFromEntry(e);
+              files.push(...subFiles);
+            }
+            // Continue reading (directories may have batched results)
+            const moreFiles = await readEntries();
+            resolve(moreFiles);
+          }
+        }, () => resolve(files));
+      });
+    };
+    
+    return readEntries();
+  }
+  return [];
+}
+
+// Get all files from DataTransfer (supports folders)
+async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<File[]> {
+  const files: File[] = [];
+  const items = dataTransfer.items;
+  
+  // Try to use webkitGetAsEntry for folder support
+  const entries: FileSystemEntry[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const entry = items[i].webkitGetAsEntry?.();
+    if (entry) {
+      entries.push(entry);
+    }
+  }
+  
+  if (entries.length > 0) {
+    for (const entry of entries) {
+      const entryFiles = await getFilesFromEntry(entry);
+      files.push(...entryFiles);
+    }
+    return files;
+  }
+  
+  // Fallback to regular files
+  return Array.from(dataTransfer.files);
 }
 
 export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
@@ -27,12 +88,14 @@ export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     cardRef.current?.classList.remove('drag-over');
-    if (e.dataTransfer.files.length > 0) {
-      onDrop(peer, e.dataTransfer.files);
+    
+    const files = await getFilesFromDataTransfer(e.dataTransfer);
+    if (files.length > 0) {
+      onDrop(peer, files);
     }
   };
 
@@ -48,8 +111,8 @@ export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
     >
       <span className="heart-float">💕</span>
       <div className="drop-overlay">
-        <span className="drop-icon">📦</span>
-        <span className="drop-text">วางที่นี่!</span>
+        <span className="drop-icon">📁</span>
+        <span className="drop-text">วางไฟล์หรือโฟลเดอร์!</span>
       </div>
       <div className="peer-cloud">
         <div className="peer-critter">{peer.critter.emoji}</div>

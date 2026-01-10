@@ -74,10 +74,15 @@ export default function Home() {
     prevPeerIdsRef.current = currentIds;
   }, [peers, play]);
 
-  // Get URL for QR
+  // Get URL for QR + Register Service Worker
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setUrl(window.location.href);
+      
+      // Register service worker for PWA
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+      }
     }
   }, []);
 
@@ -245,10 +250,9 @@ export default function Home() {
     fileInputRef.current?.click();
   }, [vibrate]);
 
-  const handleDropFiles = useCallback((peer: Peer, files: FileList) => {
+  const handleDropFiles = useCallback((peer: Peer, files: File[]) => {
     vibrate([20, 50, 20]);
-    const fileArray = Array.from(files);
-    handleMultiFiles(fileArray, peer);
+    handleMultiFiles(files, peer);
   }, [handleMultiFiles, vibrate]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -306,6 +310,7 @@ export default function Home() {
         {transfer && (
           <TransferProgress
             fileName={transfer.fileName}
+            fileSize={transfer.fileSize}
             progress={transfer.progress}
             status={transfer.status}
             emoji={myPeer?.critter.emoji || '🐱'}
