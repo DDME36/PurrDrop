@@ -1,7 +1,7 @@
 import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
-import { Server as SocketIOServer } from 'socket.io';
+import { Server as SocketIOServer, Socket } from 'socket.io';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
@@ -10,9 +10,8 @@ const port = parseInt(process.env.PORT || '3000', 10);
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-interface Peer {
+interface PeerData {
   id: string;
-  socketId: string;
   name: string;
   device: string;
   critter: {
@@ -23,7 +22,44 @@ interface Peer {
   };
 }
 
+// Peer with multiple sockets (tabs)
+interface Peer extends PeerData {
+  sockets: Set<string>; // Multiple socket IDs for same user
+}
+
 const peers = new Map<string, Peer>();
+
+// Helper: Get peer by socket ID
+function getPeerBySocketId(socketId: string): Peer | undefined {
+  for (const peer of peers.values()) {
+    if (peer.sockets.has(socketId)) {
+      return peer;
+    }
+  }
+  return undefined;
+}
+
+// Helper: Send to all sockets of a peer
+function emitToPeer(io: SocketIOServer, peer: Peer, event: string, data: unknown) {
+  peer.sockets.forEach(socketId => {
+    io.to(socketId).emit(event, data);
+  });
+}
+
+// Helper: Broadcast peers list to everyone
+function broadcastPeers(io: SocketIOServer) {
+  const peerList = Array.from(peers.values()).map(p => ({
+    id: p.id,
+    name: p.name,
+    device: p.device,
+    critter: p.critter,
+  }));
+  
+  for (const peer of peers.values()) {
+    const others = peerList.filter(p => p.id !== peer.id);
+    emitToPeer(io, peer, 'peers', others);
+  }
+}
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
@@ -39,68 +75,69 @@ app.prepare().then(() => {
     transports: ['websocket', 'polling'],
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', (socket: Socket) => {
     console.log('Client connected:', socket.id);
 
-    socket.on('join', (peerData: Omit<Peer, 'socketId'>) => {
-      const peer: Peer = {
-        ...peerData,
-        socketId: socket.id,
-      };
+    socket.on('join', (peerData: PeerData) => {
+      const existingPeer = peers.get(peerData.id);
       
-      // Update or add peer
-      peers.set(peerData.id, peer);
+      if (existingPeer) {
+        // Same user, new tab - add socket to existing peer
+        existingPeer.sockets.add(socket.id);
+        existingPeer.name = peerData.name;
+        existingPeer.critter = peerData.critter;
+        console.log(`Peer reconnected (new tab): ${peerData.name} (${peerData.id}) - ${existingPeer.sockets.size} tabs`);
+      } else {
+        // New user
+        const peer: Peer = {
+          ...peerData,
+          sockets: new Set([socket.id]),
+        };
+        peers.set(peerData.id, peer);
+        console.log(`Peer joined: ${peer.name} (${peer.id})`);
+      }
       
-      // Send current peers to new client
-      const peerList = Array.from(peers.values()).filter(p => p.id !== peerData.id);
-      socket.emit('peers', peerList);
-      
-      // Notify others
-      socket.broadcast.emit('peer-joined', peer);
-      
-      console.log(`Peer joined: ${peer.name} (${peer.id})`);
+      // Broadcast updated peer list to everyone
+      broadcastPeers(io);
     });
 
     socket.on('update-name', ({ name }) => {
-      const peer = Array.from(peers.values()).find(p => p.socketId === socket.id);
+      const peer = getPeerBySocketId(socket.id);
       if (peer) {
         peer.name = name;
-        socket.broadcast.emit('peer-joined', peer);
+        broadcastPeers(io);
       }
     });
 
     socket.on('update-emoji', ({ emoji }) => {
-      const peer = Array.from(peers.values()).find(p => p.socketId === socket.id);
+      const peer = getPeerBySocketId(socket.id);
       if (peer) {
         peer.critter.emoji = emoji;
-        socket.broadcast.emit('peer-joined', peer);
+        broadcastPeers(io);
       }
     });
 
     // File transfer signaling
     socket.on('file-offer', (data) => {
-      console.log('file-offer received:', { to: data.to, from: data.from?.name, fileId: data.fileId, fileName: data.file?.name });
+      console.log('file-offer:', data.from?.name, '->', data.to, data.file?.name);
       const targetPeer = peers.get(data.to);
       if (targetPeer) {
-        console.log('Forwarding file-offer to:', targetPeer.name, 'socketId:', targetPeer.socketId);
-        io.to(targetPeer.socketId).emit('file-offer', {
+        // Send to all tabs of target peer
+        emitToPeer(io, targetPeer, 'file-offer', {
           from: data.from,
           file: data.file,
           fileId: data.fileId,
         });
-      } else {
-        console.log('Target peer not found:', data.to);
       }
     });
 
     socket.on('file-accept', (data) => {
-      console.log('file-accept received:', data);
       const targetPeer = peers.get(data.to);
-      if (targetPeer) {
-        const senderPeer = Array.from(peers.values()).find(p => p.socketId === socket.id);
-        console.log('Forwarding file-accept to:', targetPeer.name, 'fileId:', data.fileId);
-        io.to(targetPeer.socketId).emit('file-accept', {
-          from: senderPeer?.id,
+      const senderPeer = getPeerBySocketId(socket.id);
+      if (targetPeer && senderPeer) {
+        console.log('file-accept:', senderPeer.name, '->', targetPeer.name);
+        emitToPeer(io, targetPeer, 'file-accept', {
+          from: senderPeer.id,
           fileId: data.fileId,
         });
       }
@@ -109,17 +146,19 @@ app.prepare().then(() => {
     socket.on('file-reject', (data) => {
       const targetPeer = peers.get(data.to);
       if (targetPeer) {
-        io.to(targetPeer.socketId).emit('file-reject', {});
+        emitToPeer(io, targetPeer, 'file-reject', {});
       }
     });
 
-    // WebRTC Signaling
+    // WebRTC Signaling - send to specific socket only
     socket.on('rtc-offer', (data) => {
       const targetPeer = peers.get(data.to);
-      if (targetPeer) {
-        const senderPeer = Array.from(peers.values()).find(p => p.socketId === socket.id);
-        io.to(targetPeer.socketId).emit('rtc-offer', {
-          from: senderPeer?.id,
+      const senderPeer = getPeerBySocketId(socket.id);
+      if (targetPeer && senderPeer) {
+        // Send to first socket of target (WebRTC is 1-to-1)
+        const targetSocketId = Array.from(targetPeer.sockets)[0];
+        io.to(targetSocketId).emit('rtc-offer', {
+          from: senderPeer.id,
           offer: data.offer,
         });
       }
@@ -127,10 +166,11 @@ app.prepare().then(() => {
 
     socket.on('rtc-answer', (data) => {
       const targetPeer = peers.get(data.to);
-      if (targetPeer) {
-        const senderPeer = Array.from(peers.values()).find(p => p.socketId === socket.id);
-        io.to(targetPeer.socketId).emit('rtc-answer', {
-          from: senderPeer?.id,
+      const senderPeer = getPeerBySocketId(socket.id);
+      if (targetPeer && senderPeer) {
+        const targetSocketId = Array.from(targetPeer.sockets)[0];
+        io.to(targetSocketId).emit('rtc-answer', {
+          from: senderPeer.id,
           answer: data.answer,
         });
       }
@@ -138,21 +178,30 @@ app.prepare().then(() => {
 
     socket.on('rtc-ice', (data) => {
       const targetPeer = peers.get(data.to);
-      if (targetPeer) {
-        const senderPeer = Array.from(peers.values()).find(p => p.socketId === socket.id);
-        io.to(targetPeer.socketId).emit('rtc-ice', {
-          from: senderPeer?.id,
+      const senderPeer = getPeerBySocketId(socket.id);
+      if (targetPeer && senderPeer) {
+        const targetSocketId = Array.from(targetPeer.sockets)[0];
+        io.to(targetSocketId).emit('rtc-ice', {
+          from: senderPeer.id,
           candidate: data.candidate,
         });
       }
     });
 
     socket.on('disconnect', () => {
-      const peer = Array.from(peers.values()).find(p => p.socketId === socket.id);
+      const peer = getPeerBySocketId(socket.id);
       if (peer) {
-        peers.delete(peer.id);
-        socket.broadcast.emit('peer-left', peer.id);
-        console.log(`Peer left: ${peer.name} (${peer.id})`);
+        peer.sockets.delete(socket.id);
+        
+        if (peer.sockets.size === 0) {
+          // All tabs closed - remove peer
+          peers.delete(peer.id);
+          console.log(`Peer left: ${peer.name} (${peer.id})`);
+        } else {
+          console.log(`Tab closed: ${peer.name} - ${peer.sockets.size} tabs remaining`);
+        }
+        
+        broadcastPeers(io);
       }
     });
   });

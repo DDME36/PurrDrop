@@ -1365,3 +1365,49 @@ body {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* iOS Keyboard-aware modal */
+.modal-keyboard-aware {
+  align-items: flex-start;
+  padding-top: 10vh;
+  padding-bottom: 50vh; /* Space for keyboard */
+  overflow-y: auto;
+}
+
+.modal-input-modal {
+  margin-top: 0;
+  margin-bottom: auto;
+  position: relative;
+}
+
+/* iOS specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .modal-keyboard-aware {
+    padding-top: 5vh;
+  }
+  
+  .modal-input-modal {
+    transform: translateY(0);
+  }
+  
+  .name-input:focus {
+    transform: translateY(-20px);
+  }
+}
+
+/* Small screens */
+@media (max-height: 600px) {
+  .modal-keyboard-aware {
+    padding-top: 2vh;
+  }
+  
+  .modal-input-modal .modal-icon {
+    font-size: 40px;
+    margin-bottom: 8px;
+  }
+  
+  .modal-input-modal .modal-title {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface NameModalProps {
   show: boolean;
@@ -11,10 +11,21 @@ interface NameModalProps {
 
 export function NameModal({ show, currentName, onSubmit, onClose }: NameModalProps) {
   const [name, setName] = useState(currentName);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setName(currentName);
   }, [currentName, show]);
+
+  // Scroll input into view when keyboard opens (iOS fix)
+  useEffect(() => {
+    if (show && inputRef.current) {
+      // Small delay to let modal render
+      setTimeout(() => {
+        inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  }, [show]);
 
   if (!show) return null;
 
@@ -25,12 +36,20 @@ export function NameModal({ show, currentName, onSubmit, onClose }: NameModalPro
     onClose();
   };
 
+  const handleFocus = () => {
+    // Scroll to input when focused (iOS keyboard fix)
+    setTimeout(() => {
+      inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+  };
+
   return (
-    <div className="modal show">
-      <div className="modal-content modal-small">
+    <div className="modal show modal-keyboard-aware">
+      <div className="modal-content modal-small modal-input-modal">
         <div className="modal-icon">✏️</div>
         <div className="modal-title">ตั้งชื่อใหม่</div>
         <input
+          ref={inputRef}
           type="text"
           className="name-input"
           placeholder="ชื่อของคุณ"
@@ -38,7 +57,11 @@ export function NameModal({ show, currentName, onSubmit, onClose }: NameModalPro
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-          autoFocus
+          onFocus={handleFocus}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
         />
         <div className="modal-actions" style={{ marginTop: 16 }}>
           <button className="btn btn-reject" onClick={onClose}>ยกเลิก</button>
