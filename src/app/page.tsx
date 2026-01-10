@@ -191,8 +191,17 @@ export default function Home() {
     eocdView.setUint32(16, offset, true);
     eocdView.setUint16(20, 0, true);
 
-    const allParts = [...parts, ...centralDirectory, eocd];
-    const blob = new Blob(allParts.map(arr => new Uint8Array(arr).buffer as ArrayBuffer), { type: 'application/zip' });
+    // Convert all Uint8Array to ArrayBuffer for Blob compatibility
+    const blobParts: ArrayBuffer[] = [];
+    for (const part of parts) {
+      blobParts.push(part.buffer.slice(part.byteOffset, part.byteOffset + part.byteLength));
+    }
+    for (const cd of centralDirectory) {
+      blobParts.push(cd.buffer.slice(cd.byteOffset, cd.byteOffset + cd.byteLength));
+    }
+    blobParts.push(eocd.buffer.slice(eocd.byteOffset, eocd.byteOffset + eocd.byteLength));
+    
+    const blob = new Blob(blobParts, { type: 'application/zip' });
     const timestamp = new Date().toISOString().slice(0, 10);
     return new File([blob], `PurrDrop_${timestamp}.zip`, { type: 'application/zip' });
   }, []);
