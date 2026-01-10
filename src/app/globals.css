@@ -1053,6 +1053,18 @@ body {
   gap: 12px;
 }
 
+.modal-actions-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.modal-actions-vertical .btn {
+  width: 100%;
+  justify-content: center;
+}
+
 .modal-url {
   font-size: 12px;
   color: var(--text-secondary);
