@@ -49,16 +49,38 @@ export function usePeerConnection() {
   useEffect(() => { myPeerRef.current = myPeer; }, [myPeer]);
   useEffect(() => { peersRef.current = peers; }, [peers]);
 
-  // Download blob
+  // Download blob - with iOS Safari support
   const downloadBlob = useCallback((blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    
+    // Check if iOS Safari
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    if (isIOS) {
+      // iOS Safari: open in new tab, user can then save
+      const newWindow = window.open(url, '_blank');
+      if (!newWindow) {
+        // Popup blocked, try direct link
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } else {
+      // Other browsers: direct download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+    
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }, []);
 
   // Setup data channel handlers

@@ -16,7 +16,6 @@ import {
   QRModal,
   HelpModal,
   SuccessModal,
-  MultiFileModal,
 } from '@/components/modals';
 import { useSound } from '@/hooks/useSound';
 import { usePeerConnection } from '@/hooks/usePeerConnection';
@@ -45,19 +44,15 @@ export default function Home() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [showMultiFileModal, setShowMultiFileModal] = useState(false);
   const [successPeer, setSuccessPeer] = useState<Peer | null>(null);
   const [newPeerIds, setNewPeerIds] = useState<Set<string>>(new Set());
   const [url, setUrl] = useState('');
-  const [pendingMultiFiles, setPendingMultiFiles] = useState<File[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedPeerRef = useRef<Peer | null>(null);
   const confettiRef = useRef<ConfettiRef>(null);
   const toastRef = useRef<ToastRef>(null);
   const prevPeerIdsRef = useRef<Set<string>>(new Set());
-  const fileQueueRef = useRef<File[]>([]);
-  const isProcessingQueueRef = useRef(false);
 
   // Track new peers for animation
   useEffect(() => {
@@ -86,16 +81,11 @@ export default function Home() {
     }
   }, []);
 
-  // Handle transfer complete - process next file in queue
+  // Handle transfer complete
   useEffect(() => {
     if (transfer?.status === 'complete') {
       play('success');
       confettiRef.current?.burst();
-      
-      // Process next file in queue after a short delay
-      setTimeout(() => {
-        processNextInQueue();
-      }, 500);
     }
   }, [transfer?.status, play]);
 
@@ -114,39 +104,6 @@ export default function Home() {
       clearTransferResult();
     }
   }, [transferResult, clearTransferResult]);
-
-  // Process file queue
-  const processNextInQueue = useCallback(() => {
-    if (fileQueueRef.current.length === 0) {
-      isProcessingQueueRef.current = false;
-      return;
-    }
-    
-    if (!selectedPeerRef.current) {
-      fileQueueRef.current = [];
-      isProcessingQueueRef.current = false;
-      return;
-    }
-
-    const nextFile = fileQueueRef.current.shift();
-    if (nextFile) {
-      sendFile(selectedPeerRef.current, nextFile);
-    }
-  }, [sendFile]);
-
-  // Send files sequentially
-  const sendFilesSequentially = useCallback((files: File[], peer: Peer) => {
-    selectedPeerRef.current = peer;
-    fileQueueRef.current = [...files];
-    isProcessingQueueRef.current = true;
-    
-    // Start with first file
-    const firstFile = fileQueueRef.current.shift();
-    if (firstFile) {
-      sendFile(peer, firstFile);
-      play('whoosh');
-    }
-  }, [sendFile, play]);
 
   // Create ZIP file
   const createZipFile = useCallback(async (files: File[]): Promise<File> => {
@@ -239,7 +196,7 @@ export default function Home() {
     return new File([blob], `PurrDrop_${timestamp}.zip`, { type: 'application/zip' });
   }, []);
 
-  // Handle multi-file selection
+  // Handle multi-file selection - auto ZIP if multiple files
   const handleMultiFiles = useCallback(async (files: File[], peer: Peer) => {
     console.log('handleMultiFiles called with', files.length, 'files');
     
@@ -252,55 +209,22 @@ export default function Home() {
       return;
     }
 
-    // Multiple files - show options modal
-    console.log('Showing multi-file modal');
-    selectedPeerRef.current = peer;
-    setPendingMultiFiles([...files]); // Copy array
-    setShowMultiFileModal(true);
-  }, [sendFile, play]);
-
-  const handleMultiFileZip = useCallback(async () => {
-    setShowMultiFileModal(false);
-    if (!selectedPeerRef.current || pendingMultiFiles.length === 0) return;
-
-    toastRef.current?.show('กำลังสร้างไฟล์ ZIP...', 'info');
+    // Multiple files - auto create ZIP (simpler UX)
+    console.log('Creating ZIP for', files.length, 'files');
+    toastRef.current?.show(`กำลังรวม ${files.length} ไฟล์เป็น ZIP...`, 'info');
     
     try {
-      const zipFile = await createZipFile(pendingMultiFiles);
-      sendFile(selectedPeerRef.current, zipFile);
+      const zipFile = await createZipFile(files);
+      console.log('ZIP created:', zipFile.name, zipFile.size);
+      sendFile(peer, zipFile);
       play('whoosh');
-    } catch {
-      toastRef.current?.show('สร้าง ZIP ไม่สำเร็จ ส่งทีละไฟล์แทน', 'warning');
-      sendFilesSequentially(pendingMultiFiles, selectedPeerRef.current);
+    } catch (err) {
+      console.error('ZIP creation failed:', err);
+      toastRef.current?.show('สร้าง ZIP ไม่สำเร็จ ส่งไฟล์แรกแทน', 'warning');
+      sendFile(peer, files[0]);
+      play('whoosh');
     }
-    
-    setPendingMultiFiles([]);
-  }, [pendingMultiFiles, createZipFile, sendFile, sendFilesSequentially, play]);
-
-  const handleMultiFileSeparate = useCallback(async () => {
-    setShowMultiFileModal(false);
-    if (!selectedPeerRef.current || pendingMultiFiles.length === 0) return;
-    
-    const peer = selectedPeerRef.current;
-    const files = [...pendingMultiFiles];
-    setPendingMultiFiles([]);
-    
-    // Send all files - each will need to be accepted by receiver
-    // But we'll send them all at once, receiver will get multiple offers
-    toastRef.current?.show(`กำลังส่ง ${files.length} ไฟล์...`, 'info');
-    
-    for (const file of files) {
-      sendFile(peer, file);
-      // Small delay between sends to avoid overwhelming
-      await new Promise(r => setTimeout(r, 100));
-    }
-    play('whoosh');
-  }, [pendingMultiFiles, sendFile, play]);
-
-  const handleMultiFileCancel = useCallback(() => {
-    setShowMultiFileModal(false);
-    setPendingMultiFiles([]);
-  }, []);
+  }, [sendFile, play, createZipFile]);
 
   const handleSelectPeer = useCallback((peer: Peer) => {
     vibrate(15);
@@ -332,8 +256,6 @@ export default function Home() {
     rejectFile();
     toastRef.current?.show('ปฏิเสธไฟล์แล้ว', 'warning');
   }, [rejectFile]);
-
-  const totalPendingSize = pendingMultiFiles.reduce((sum, f) => sum + f.size, 0);
 
   return (
     <>
@@ -396,15 +318,6 @@ export default function Home() {
           onReject={handleRejectFile}
         />
       )}
-
-      <MultiFileModal
-        show={showMultiFileModal}
-        fileCount={pendingMultiFiles.length}
-        totalSize={totalPendingSize}
-        onZip={handleMultiFileZip}
-        onSeparate={handleMultiFileSeparate}
-        onCancel={handleMultiFileCancel}
-      />
 
       <NameModal
         show={showNameModal}
