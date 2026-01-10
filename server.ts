@@ -79,13 +79,17 @@ app.prepare().then(() => {
 
     // File transfer signaling
     socket.on('file-offer', (data) => {
+      console.log('file-offer received:', { to: data.to, from: data.from?.name, fileId: data.fileId, fileName: data.file?.name });
       const targetPeer = peers.get(data.to);
       if (targetPeer) {
+        console.log('Forwarding file-offer to:', targetPeer.name, 'socketId:', targetPeer.socketId);
         io.to(targetPeer.socketId).emit('file-offer', {
           from: data.from,
           file: data.file,
           fileId: data.fileId,
         });
+      } else {
+        console.log('Target peer not found:', data.to);
       }
     });
 

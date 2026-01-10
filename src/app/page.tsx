@@ -28,11 +28,13 @@ export default function Home() {
     peers,
     fileOffer,
     transfer,
+    transferResult,
     sendFile,
     acceptFile,
     rejectFile,
     updateName,
     updateEmoji,
+    clearTransferResult,
   } = usePeerConnection();
 
   const { muted, toggle: toggleMute, play, vibrate } = useSound();
@@ -84,12 +86,26 @@ export default function Home() {
     if (transfer?.status === 'complete') {
       play('success');
       confettiRef.current?.burst();
-      if (selectedPeerRef.current) {
-        setSuccessPeer(selectedPeerRef.current);
-        setShowSuccess(true);
-      }
     }
   }, [transfer?.status, play]);
+
+  // Handle transfer result (both send and receive)
+  useEffect(() => {
+    if (transferResult) {
+      if (transferResult.success) {
+        setSuccessPeer({
+          id: '',
+          name: transferResult.peerName,
+          device: '',
+          critter: { type: '', color: '', emoji: '🎉', os: '' },
+        });
+        setShowSuccess(true);
+        confettiRef.current?.burst();
+        play('success');
+      }
+      clearTransferResult();
+    }
+  }, [transferResult, clearTransferResult, play]);
 
   const handleSelectPeer = useCallback((peer: Peer) => {
     vibrate(15);
