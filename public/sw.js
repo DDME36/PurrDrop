@@ -1,7 +1,8 @@
-const CACHE_NAME = 'purrdrop-v1';
+const CACHE_NAME = 'purrdrop-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
+  '/icon.svg',
 ];
 
 // Install - cache static assets
@@ -52,5 +53,25 @@ self.addEventListener('fetch', (event) => {
         // Fallback to cache
         return caches.match(event.request);
       })
+  );
+});
+
+// Handle notification click
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Focus existing window if available
+      for (const client of clientList) {
+        if ('focus' in client) {
+          return client.focus();
+        }
+      }
+      // Open new window if no existing window
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
   );
 });

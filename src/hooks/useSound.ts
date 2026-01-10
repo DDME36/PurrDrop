@@ -18,7 +18,7 @@ export function useSound() {
     });
   }, []);
 
-  const play = useCallback((type: 'connect' | 'whoosh' | 'success') => {
+  const play = useCallback((type: 'connect' | 'whoosh' | 'success' | 'notification') => {
     if (muted) return;
     try {
       const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -44,6 +44,14 @@ export function useSound() {
         osc.start();
         osc.frequency.linearRampToValueAtTime(900, ctx.currentTime + 0.15);
         osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.3);
+        osc.stop(ctx.currentTime + 0.3);
+      } else if (type === 'notification') {
+        // Two-tone notification sound
+        osc.frequency.value = 880;
+        gain.gain.value = 0.12;
+        osc.start();
+        osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
         osc.stop(ctx.currentTime + 0.3);
       }
     } catch {

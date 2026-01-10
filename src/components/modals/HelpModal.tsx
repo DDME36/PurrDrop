@@ -15,7 +15,7 @@ export function HelpModal({ show, onClose }: HelpModalProps) {
         <div className="help-steps">
           <div className="help-step">
             <div className="step-icon">📱</div>
-            <div className="step-text">เปิด Critters ในอุปกรณ์อื่น<br />ที่ใช้ Wi-Fi เดียวกัน</div>
+            <div className="step-text">เปิด PurrDrop ในอุปกรณ์อื่น<br />ที่ใช้ Wi-Fi เดียวกัน</div>
           </div>
           <div className="help-step">
             <div className="step-icon">👆</div>

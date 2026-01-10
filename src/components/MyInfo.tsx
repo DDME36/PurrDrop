@@ -1,6 +1,7 @@
 'use client';
 
 import { Peer } from '@/lib/critters';
+import { useTheme } from '@/hooks/useTheme';
 
 interface MyInfoProps {
   peer: Peer | null;
@@ -10,11 +11,19 @@ interface MyInfoProps {
 }
 
 export function MyInfo({ peer, connected, onEditName, onEditEmoji }: MyInfoProps) {
+  const { isDark } = useTheme();
+  
+  const avatarGradient = peer 
+    ? isDark 
+      ? peer.critter.color 
+      : `linear-gradient(135deg, ${peer.critter.color}, #fff)`
+    : undefined;
+
   return (
     <div className={`my-critter-bar ${!connected ? 'offline' : ''}`}>
       <div 
         className="my-critter-avatar"
-        style={{ background: peer ? `linear-gradient(135deg, ${peer.critter.color}, #fff)` : undefined }}
+        style={{ background: avatarGradient }}
         onClick={onEditEmoji}
       >
         {peer?.critter.emoji || '🐱'}

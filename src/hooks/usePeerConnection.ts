@@ -13,6 +13,7 @@ interface FileOffer {
 
 interface TransferProgress {
   peerId: string;
+  peerName: string;
   fileName: string;
   fileSize: number;
   progress: number;
@@ -22,13 +23,19 @@ interface TransferProgress {
 interface TransferResult {
   success: boolean;
   fileName: string;
+  fileSize: number;
   peerName: string;
 }
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
 ];
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000;
 
 export function usePeerConnection() {
   const [connected, setConnected] = useState(false);
@@ -109,12 +116,14 @@ export function usePeerConnection() {
           console.log('📨 DataChannel message:', msg.type);
           
           if (msg.type === 'file-start') {
+            const senderPeer = peersRef.current.find(p => p.id === peerId);
             receivingFilesRef.current.set(msg.fileId, {
               chunks: [],
               info: { name: msg.name, size: msg.size, type: msg.mimeType },
             });
             setTransfer({
               peerId,
+              peerName: senderPeer?.name || 'ไม่ทราบชื่อ',
               fileName: msg.name,
               fileSize: msg.size,
               progress: 0,
@@ -133,11 +142,13 @@ export function usePeerConnection() {
               setTransferResult({
                 success: true,
                 fileName: receiving.info.name,
+                fileSize: receiving.info.size,
                 peerName: senderPeer?.name || 'เพื่อน',
               });
               
               receivingFilesRef.current.delete(msg.fileId);
-              setTimeout(() => setTransfer(null), 2000);
+              // Let TransferProgress component handle the display timing
+              setTimeout(() => setTransfer(null), 8000);
             }
           }
         } catch (err) {
@@ -192,12 +203,13 @@ export function usePeerConnection() {
     return pc;
   }, [setupDataChannel]);
 
-  // Send file via WebRTC
-  const sendFileViaWebRTC = useCallback(async (peerId: string, file: File, fileId: string, targetPeer: Peer) => {
-    console.log(`📤 Starting WebRTC transfer to ${peerId}`);
+  // Send file via WebRTC with retry logic
+  const sendFileViaWebRTC = useCallback(async (peerId: string, file: File, fileId: string, targetPeer: Peer, retryCount = 0) => {
+    console.log(`📤 Starting WebRTC transfer to ${peerId} (attempt ${retryCount + 1})`);
     
     setTransfer({
       peerId,
+      peerName: targetPeer.name,
       fileName: file.name,
       fileSize: file.size,
       progress: 0,
@@ -221,7 +233,7 @@ export function usePeerConnection() {
       socketRef.current.emit('rtc-offer', { to: peerId, offer });
       console.log('📤 Sent RTC offer');
 
-      // Wait for data channel to open
+      // Wait for data channel to open with timeout
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Connection timeout')), 15000);
         
@@ -229,6 +241,11 @@ export function usePeerConnection() {
           clearTimeout(timeout);
           console.log('✅ DataChannel ready for sending');
           resolve();
+        };
+        
+        dc.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error('DataChannel error'));
         };
         
         if (dc.readyState === 'open') {
@@ -275,15 +292,41 @@ export function usePeerConnection() {
       setTransferResult({
         success: true,
         fileName: file.name,
+        fileSize: file.size,
         peerName: targetPeer.name,
       });
       
-      setTimeout(() => setTransfer(null), 2000);
+      // Let TransferProgress component handle the display timing
+      setTimeout(() => setTransfer(null), 8000);
       
     } catch (err) {
       console.error('❌ Transfer error:', err);
+      
+      // Retry logic
+      if (retryCount < MAX_RETRIES) {
+        console.log(`🔄 Retrying transfer (${retryCount + 1}/${MAX_RETRIES})...`);
+        setTransfer(prev => prev ? { ...prev, status: 'sending', progress: 0 } : null);
+        
+        // Clean up failed connection
+        peerConnectionsRef.current.get(peerId)?.close();
+        peerConnectionsRef.current.delete(peerId);
+        dataChannelsRef.current.delete(peerId);
+        
+        // Wait before retry
+        await new Promise(r => setTimeout(r, RETRY_DELAY));
+        
+        // Retry
+        return sendFileViaWebRTC(peerId, file, fileId, targetPeer, retryCount + 1);
+      }
+      
       setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
-      setTimeout(() => setTransfer(null), 3000);
+      setTransferResult({
+        success: false,
+        fileName: file.name,
+        fileSize: file.size,
+        peerName: targetPeer.name,
+      });
+      setTimeout(() => setTransfer(null), 5000);
     }
   }, [createPeerConnection, setupDataChannel]);
 

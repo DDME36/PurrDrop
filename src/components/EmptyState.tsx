@@ -14,13 +14,13 @@ export function EmptyState({ emoji, onShowQR, onShowHelp }: EmptyStateProps) {
         <div className="empty-critter">{emoji}</div>
       </div>
       <div className="empty-message">รอเพื่อนอยู่เลยนะ ~</div>
-      <div className="empty-hint">เปิด Critters ในเครื่องอื่นใน Wi-Fi เดียวกันสิ!</div>
+      <div className="empty-hint">เปิด PurrDrop ในเครื่องอื่นใน Wi-Fi เดียวกันสิ!</div>
       <div className="empty-actions">
         <button className="btn btn-pastel pink" onClick={onShowQR}>
-          <span>📷</span> แสดง QR Code
+          <span className="btn-icon">⎔</span> แสดง QR Code
         </button>
         <button className="btn btn-pastel mint" onClick={onShowHelp}>
-          <span>❓</span> วิธีใช้งาน
+          <span className="btn-icon">?</span> วิธีใช้งาน
         </button>
       </div>
     </div>

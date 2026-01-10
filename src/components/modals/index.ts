@@ -5,3 +5,6 @@ export { QRModal } from './QRModal';
 export { HelpModal } from './HelpModal';
 export { SuccessModal } from './SuccessModal';
 export { MultiFileModal } from './MultiFileModal';
+export { HistoryModal } from './HistoryModal';
+export { TextShareModal } from './TextShareModal';
+export { ConfirmModal } from './ConfirmModal';

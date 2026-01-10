@@ -15,11 +15,14 @@ import {
   EmojiModal,
   QRModal,
   HelpModal,
-  SuccessModal,
+  HistoryModal,
 } from '@/components/modals';
 import { useSound } from '@/hooks/useSound';
 import { usePeerConnection } from '@/hooks/usePeerConnection';
+import { useTheme } from '@/hooks/useTheme';
+import { useNotification } from '@/hooks/useNotification';
 import { Peer } from '@/lib/critters';
+import { getHistory, addToHistory, TransferRecord } from '@/lib/transferHistory';
 
 export default function Home() {
   const {
@@ -38,21 +41,38 @@ export default function Home() {
   } = usePeerConnection();
 
   const { muted, toggle: toggleMute, play, vibrate } = useSound();
+  const { isDark, toggleTheme } = useTheme();
+  const { requestPermission, notifyFileOffer, notifyTransferComplete, notifyPeerJoined } = useNotification();
 
   const [showNameModal, setShowNameModal] = useState(false);
   const [showEmojiModal, setShowEmojiModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [successPeer, setSuccessPeer] = useState<Peer | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [newPeerIds, setNewPeerIds] = useState<Set<string>>(new Set());
   const [url, setUrl] = useState('');
+  const [history, setHistory] = useState<TransferRecord[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedPeerRef = useRef<Peer | null>(null);
   const confettiRef = useRef<ConfettiRef>(null);
   const toastRef = useRef<ToastRef>(null);
   const prevPeerIdsRef = useRef<Set<string>>(new Set());
+
+  // Load history on mount
+  useEffect(() => {
+    setHistory(getHistory());
+  }, []);
+
+  // Request notification permission on first interaction
+  useEffect(() => {
+    const handleInteraction = () => {
+      requestPermission();
+      window.removeEventListener('click', handleInteraction);
+    };
+    window.addEventListener('click', handleInteraction);
+    return () => window.removeEventListener('click', handleInteraction);
+  }, [requestPermission]);
 
   // Track new peers for animation
   useEffect(() => {
@@ -62,6 +82,10 @@ export default function Home() {
     currentIds.forEach(id => {
       if (!prevPeerIdsRef.current.has(id)) {
         newIds.add(id);
+        const newPeer = peers.find(p => p.id === id);
+        if (newPeer) {
+          notifyPeerJoined(newPeer.name);
+        }
       }
     });
 
@@ -72,7 +96,7 @@ export default function Home() {
     }
 
     prevPeerIdsRef.current = currentIds;
-  }, [peers, play]);
+  }, [peers, play, notifyPeerJoined]);
 
   // Get URL for QR + Register Service Worker
   useEffect(() => {
@@ -86,38 +110,48 @@ export default function Home() {
     }
   }, []);
 
+  // Handle file offer notification
+  useEffect(() => {
+    if (fileOffer) {
+      notifyFileOffer(fileOffer.from.name, fileOffer.file.name);
+      play('notification');
+      vibrate([100, 50, 100]);
+    }
+  }, [fileOffer, notifyFileOffer, play, vibrate]);
+
   // Handle transfer complete
   useEffect(() => {
     if (transfer?.status === 'complete') {
       play('success');
       confettiRef.current?.burst();
+      notifyTransferComplete(transfer.fileName, 'received');
     }
-  }, [transfer?.status, play]);
+  }, [transfer?.status, transfer?.fileName, play, notifyTransferComplete]);
 
   // Handle transfer result (both send and receive)
   useEffect(() => {
     if (transferResult) {
       if (transferResult.success) {
-        setSuccessPeer({
-          id: '',
-          name: transferResult.peerName,
-          device: '',
-          critter: { type: '', color: '', emoji: '🎉', os: 'unknown' as const },
+        // Add to history
+        addToHistory({
+          fileName: transferResult.fileName,
+          fileSize: transferResult.fileSize,
+          peerName: transferResult.peerName,
+          direction: 'sent',
+          success: true,
         });
-        setShowSuccess(true);
+        setHistory(getHistory());
       }
       clearTransferResult();
     }
   }, [transferResult, clearTransferResult]);
 
-  // Create ZIP file - simplified version
+  // Create ZIP file
   const createZipFile = useCallback(async (files: File[]): Promise<File> => {
-    // Calculate total size for pre-allocation
-    let totalSize = 22; // EOCD size
+    let totalSize = 22;
     const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number }[] = [];
     const encoder = new TextEncoder();
     
-    // CRC32 calculation
     const crc32Table: number[] = [];
     for (let i = 0; i < 256; i++) {
       let c = i;
@@ -135,109 +169,95 @@ export default function Home() {
       return (crc ^ 0xFFFFFFFF) >>> 0;
     };
 
-    // Read all files
     for (const file of files) {
       const data = new Uint8Array(await file.arrayBuffer());
       const name = encoder.encode(file.name);
       const crc = calcCrc32(data);
       fileInfos.push({ name, data, crc });
-      totalSize += 30 + name.length + data.length; // Local header + data
-      totalSize += 46 + name.length; // Central directory entry
+      totalSize += 30 + name.length + data.length;
+      totalSize += 46 + name.length;
     }
 
-    // Create single buffer
     const buffer = new ArrayBuffer(totalSize);
     const view = new DataView(buffer);
     const bytes = new Uint8Array(buffer);
     let pos = 0;
     let cdStart = 0;
 
-    // Write local file headers and data
     for (const { name, data, crc } of fileInfos) {
-      // Local file header signature
       view.setUint32(pos, 0x04034b50, true); pos += 4;
-      view.setUint16(pos, 20, true); pos += 2; // version needed
-      view.setUint16(pos, 0, true); pos += 2; // flags
-      view.setUint16(pos, 0, true); pos += 2; // compression (store)
-      view.setUint16(pos, 0, true); pos += 2; // mod time
-      view.setUint16(pos, 0, true); pos += 2; // mod date
-      view.setUint32(pos, crc, true); pos += 4; // crc32
-      view.setUint32(pos, data.length, true); pos += 4; // compressed size
-      view.setUint32(pos, data.length, true); pos += 4; // uncompressed size
-      view.setUint16(pos, name.length, true); pos += 2; // filename length
-      view.setUint16(pos, 0, true); pos += 2; // extra field length
-      bytes.set(name, pos); pos += name.length; // filename
-      bytes.set(data, pos); pos += data.length; // file data
+      view.setUint16(pos, 20, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint32(pos, crc, true); pos += 4;
+      view.setUint32(pos, data.length, true); pos += 4;
+      view.setUint32(pos, data.length, true); pos += 4;
+      view.setUint16(pos, name.length, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      bytes.set(name, pos); pos += name.length;
+      bytes.set(data, pos); pos += data.length;
     }
 
     cdStart = pos;
 
-    // Write central directory
     let localOffset = 0;
     for (const { name, data, crc } of fileInfos) {
-      view.setUint32(pos, 0x02014b50, true); pos += 4; // signature
-      view.setUint16(pos, 20, true); pos += 2; // version made by
-      view.setUint16(pos, 20, true); pos += 2; // version needed
-      view.setUint16(pos, 0, true); pos += 2; // flags
-      view.setUint16(pos, 0, true); pos += 2; // compression
-      view.setUint16(pos, 0, true); pos += 2; // mod time
-      view.setUint16(pos, 0, true); pos += 2; // mod date
-      view.setUint32(pos, crc, true); pos += 4; // crc32
-      view.setUint32(pos, data.length, true); pos += 4; // compressed size
-      view.setUint32(pos, data.length, true); pos += 4; // uncompressed size
-      view.setUint16(pos, name.length, true); pos += 2; // filename length
-      view.setUint16(pos, 0, true); pos += 2; // extra field length
-      view.setUint16(pos, 0, true); pos += 2; // comment length
-      view.setUint16(pos, 0, true); pos += 2; // disk number
-      view.setUint16(pos, 0, true); pos += 2; // internal attrs
-      view.setUint32(pos, 0, true); pos += 4; // external attrs
-      view.setUint32(pos, localOffset, true); pos += 4; // local header offset
-      bytes.set(name, pos); pos += name.length; // filename
+      view.setUint32(pos, 0x02014b50, true); pos += 4;
+      view.setUint16(pos, 20, true); pos += 2;
+      view.setUint16(pos, 20, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint32(pos, crc, true); pos += 4;
+      view.setUint32(pos, data.length, true); pos += 4;
+      view.setUint32(pos, data.length, true); pos += 4;
+      view.setUint16(pos, name.length, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint32(pos, 0, true); pos += 4;
+      view.setUint32(pos, localOffset, true); pos += 4;
+      bytes.set(name, pos); pos += name.length;
       localOffset += 30 + name.length + data.length;
     }
 
     const cdSize = pos - cdStart;
 
-    // Write end of central directory
-    view.setUint32(pos, 0x06054b50, true); pos += 4; // signature
-    view.setUint16(pos, 0, true); pos += 2; // disk number
-    view.setUint16(pos, 0, true); pos += 2; // cd disk number
-    view.setUint16(pos, fileInfos.length, true); pos += 2; // entries on disk
-    view.setUint16(pos, fileInfos.length, true); pos += 2; // total entries
-    view.setUint32(pos, cdSize, true); pos += 4; // cd size
-    view.setUint32(pos, cdStart, true); pos += 4; // cd offset
-    view.setUint16(pos, 0, true); // comment length
+    view.setUint32(pos, 0x06054b50, true); pos += 4;
+    view.setUint16(pos, 0, true); pos += 2;
+    view.setUint16(pos, 0, true); pos += 2;
+    view.setUint16(pos, fileInfos.length, true); pos += 2;
+    view.setUint16(pos, fileInfos.length, true); pos += 2;
+    view.setUint32(pos, cdSize, true); pos += 4;
+    view.setUint32(pos, cdStart, true); pos += 4;
+    view.setUint16(pos, 0, true);
 
     const timestamp = new Date().toISOString().slice(0, 10);
     return new File([buffer], `PurrDrop_${timestamp}.zip`, { type: 'application/zip' });
   }, []);
 
-  // Handle multi-file selection - auto ZIP if multiple files (v2)
+  // Handle multi-file selection
   const handleMultiFiles = useCallback(async (files: File[], peer: Peer) => {
-    console.log('[v2] handleMultiFiles called with', files.length, 'files');
-    
     if (files.length === 0) return;
     
     if (files.length === 1) {
-      // Single file - send directly
-      console.log('[v2] Single file, sending directly');
       sendFile(peer, files[0]);
       play('whoosh');
       return;
     }
 
-    // Multiple files - auto create ZIP (simpler UX)
-    console.log('[v2] Multiple files detected, creating ZIP for', files.length, 'files');
     toastRef.current?.show(`กำลังรวม ${files.length} ไฟล์เป็น ZIP...`, 'info');
     
     try {
       const zipFile = await createZipFile(files);
-      console.log('[v2] ZIP created successfully:', zipFile.name, 'size:', zipFile.size);
       sendFile(peer, zipFile);
       play('whoosh');
       toastRef.current?.show(`ส่ง ${zipFile.name} แล้ว`, 'success');
-    } catch (err) {
-      console.error('[v2] ZIP creation failed:', err);
+    } catch {
       toastRef.current?.show('สร้าง ZIP ไม่สำเร็จ ส่งไฟล์แรกแทน', 'warning');
       sendFile(peer, files[0]);
       play('whoosh');
@@ -265,14 +285,29 @@ export default function Home() {
   }, [handleMultiFiles]);
 
   const handleAcceptFile = useCallback(() => {
+    if (fileOffer) {
+      // Add to history when receiving
+      addToHistory({
+        fileName: fileOffer.file.name,
+        fileSize: fileOffer.file.size,
+        peerName: fileOffer.from.name,
+        direction: 'received',
+        success: true,
+      });
+      setHistory(getHistory());
+    }
     acceptFile();
     toastRef.current?.show('กำลังรับไฟล์...', 'info');
-  }, [acceptFile]);
+  }, [acceptFile, fileOffer]);
 
   const handleRejectFile = useCallback(() => {
     rejectFile();
     toastRef.current?.show('ปฏิเสธไฟล์แล้ว', 'warning');
   }, [rejectFile]);
+
+  const handleClearHistory = useCallback(() => {
+    setHistory([]);
+  }, []);
 
   return (
     <>
@@ -283,7 +318,13 @@ export default function Home() {
       <div id="toastContainer" />
 
       <div className="app">
-        <Header muted={muted} onToggleMute={toggleMute} />
+        <Header 
+          muted={muted} 
+          isDark={isDark}
+          onToggleMute={toggleMute} 
+          onToggleTheme={toggleTheme}
+          onShowHistory={() => setShowHistoryModal(true)}
+        />
 
         <MyInfo
           peer={myPeer}
@@ -314,6 +355,7 @@ export default function Home() {
             progress={transfer.progress}
             status={transfer.status}
             emoji={myPeer?.critter.emoji || '🐱'}
+            peerName={transfer.peerName}
           />
         )}
 
@@ -362,13 +404,11 @@ export default function Home() {
         onClose={() => setShowHelpModal(false)}
       />
 
-      <SuccessModal
-        show={showSuccess}
-        myEmoji={myPeer?.critter.emoji || '🐱'}
-        myName={myPeer?.name || 'ฉัน'}
-        peerEmoji={successPeer?.critter.emoji || '🐰'}
-        peerName={successPeer?.name || 'เพื่อน'}
-        onClose={() => setShowSuccess(false)}
+      <HistoryModal
+        show={showHistoryModal}
+        history={history}
+        onClose={() => setShowHistoryModal(false)}
+        onClear={handleClearHistory}
       />
     </>
   );
