@@ -207,30 +207,32 @@ export default function Home() {
     return new File([buffer], `PurrDrop_${timestamp}.zip`, { type: 'application/zip' });
   }, []);
 
-  // Handle multi-file selection - auto ZIP if multiple files
+  // Handle multi-file selection - auto ZIP if multiple files (v2)
   const handleMultiFiles = useCallback(async (files: File[], peer: Peer) => {
-    console.log('handleMultiFiles called with', files.length, 'files');
+    console.log('[v2] handleMultiFiles called with', files.length, 'files');
     
     if (files.length === 0) return;
     
     if (files.length === 1) {
       // Single file - send directly
+      console.log('[v2] Single file, sending directly');
       sendFile(peer, files[0]);
       play('whoosh');
       return;
     }
 
     // Multiple files - auto create ZIP (simpler UX)
-    console.log('Creating ZIP for', files.length, 'files');
+    console.log('[v2] Multiple files detected, creating ZIP for', files.length, 'files');
     toastRef.current?.show(`กำลังรวม ${files.length} ไฟล์เป็น ZIP...`, 'info');
     
     try {
       const zipFile = await createZipFile(files);
-      console.log('ZIP created:', zipFile.name, zipFile.size);
+      console.log('[v2] ZIP created successfully:', zipFile.name, 'size:', zipFile.size);
       sendFile(peer, zipFile);
       play('whoosh');
+      toastRef.current?.show(`ส่ง ${zipFile.name} แล้ว`, 'success');
     } catch (err) {
-      console.error('ZIP creation failed:', err);
+      console.error('[v2] ZIP creation failed:', err);
       toastRef.current?.show('สร้าง ZIP ไม่สำเร็จ ส่งไฟล์แรกแทน', 'warning');
       sendFile(peer, files[0]);
       play('whoosh');
