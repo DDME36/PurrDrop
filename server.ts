@@ -90,9 +90,11 @@ app.prepare().then(() => {
     });
 
     socket.on('file-accept', (data) => {
+      console.log('file-accept received:', data);
       const targetPeer = peers.get(data.to);
       if (targetPeer) {
         const senderPeer = Array.from(peers.values()).find(p => p.socketId === socket.id);
+        console.log('Forwarding file-accept to:', targetPeer.name, 'fileId:', data.fileId);
         io.to(targetPeer.socketId).emit('file-accept', {
           from: senderPeer?.id,
           fileId: data.fileId,

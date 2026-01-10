@@ -8,6 +8,7 @@ import { Peer, assignCritter, getDeviceName, generateCuteName } from '@/lib/crit
 interface FileOffer {
   from: Peer;
   file: { name: string; size: number; type: string };
+  fileId: string;
 }
 
 interface TransferProgress {
@@ -303,7 +304,7 @@ export function usePeerConnection() {
 
   const acceptFile = useCallback(() => {
     if (!socket || !fileOffer) return;
-    socket.emit('file-accept', { to: fileOffer.from.id });
+    socket.emit('file-accept', { to: fileOffer.from.id, fileId: fileOffer.fileId });
     setFileOffer(null);
   }, [socket, fileOffer]);
 
