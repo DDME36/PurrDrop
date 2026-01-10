@@ -9,6 +9,7 @@ import { PeersGrid } from '@/components/PeersGrid';
 import { TransferProgress } from '@/components/TransferProgress';
 import { Confetti, ConfettiRef } from '@/components/Confetti';
 import { Toast, ToastRef } from '@/components/Toast';
+import { Footer } from '@/components/Footer';
 import {
   FileOfferModal,
   NameModal,
@@ -16,6 +17,7 @@ import {
   QRModal,
   HelpModal,
   HistoryModal,
+  FeedbackModal,
 } from '@/components/modals';
 import { useSound } from '@/hooks/useSound';
 import { usePeerConnection } from '@/hooks/usePeerConnection';
@@ -49,6 +51,7 @@ export default function Home() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [newPeerIds, setNewPeerIds] = useState<Set<string>>(new Set());
   const [url, setUrl] = useState('');
   const [history, setHistory] = useState<TransferRecord[]>([]);
@@ -321,9 +324,11 @@ export default function Home() {
         <Header 
           muted={muted} 
           isDark={isDark}
+          hasPeers={peers.length > 0}
           onToggleMute={toggleMute} 
           onToggleTheme={toggleTheme}
           onShowHistory={() => setShowHistoryModal(true)}
+          onShowQR={() => setShowQRModal(true)}
         />
 
         <MyInfo
@@ -366,6 +371,8 @@ export default function Home() {
           hidden
           onChange={handleFileSelect}
         />
+
+        <Footer onFeedback={() => setShowFeedbackModal(true)} />
       </div>
 
       {/* Modals */}
@@ -409,6 +416,11 @@ export default function Home() {
         history={history}
         onClose={() => setShowHistoryModal(false)}
         onClear={handleClearHistory}
+      />
+
+      <FeedbackModal
+        show={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
       />
     </>
   );
