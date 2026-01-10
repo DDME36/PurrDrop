@@ -105,25 +105,24 @@ export default function Home() {
     }
   }, [transferResult, clearTransferResult]);
 
-  // Create ZIP file
+  // Create ZIP file - simplified version
   const createZipFile = useCallback(async (files: File[]): Promise<File> => {
-    // Simple ZIP implementation
+    // Calculate total size for pre-allocation
+    let totalSize = 22; // EOCD size
+    const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number }[] = [];
     const encoder = new TextEncoder();
-    const parts: Uint8Array[] = [];
-    const centralDirectory: Uint8Array[] = [];
-    let offset = 0;
-
-    // CRC32 table
-    const crc32Table = new Uint32Array(256);
+    
+    // CRC32 calculation
+    const crc32Table: number[] = [];
     for (let i = 0; i < 256; i++) {
       let c = i;
       for (let j = 0; j < 8; j++) {
         c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
       }
-      crc32Table[i] = c;
+      crc32Table[i] = c >>> 0;
     }
-
-    const crc32 = (data: Uint8Array): number => {
+    
+    const calcCrc32 = (data: Uint8Array): number => {
       let crc = 0xFFFFFFFF;
       for (let i = 0; i < data.length; i++) {
         crc = (crc >>> 8) ^ crc32Table[(crc ^ data[i]) & 0xFF];
@@ -131,79 +130,81 @@ export default function Home() {
       return (crc ^ 0xFFFFFFFF) >>> 0;
     };
 
+    // Read all files
     for (const file of files) {
-      const fileData = new Uint8Array(await file.arrayBuffer());
-      const fileName = encoder.encode(file.name);
-      const crc = crc32(fileData);
-      
-      // Local file header
-      const localHeader = new Uint8Array(30 + fileName.length);
-      const view = new DataView(localHeader.buffer);
-      view.setUint32(0, 0x04034b50, true);
-      view.setUint16(4, 20, true);
-      view.setUint16(6, 0, true);
-      view.setUint16(8, 0, true);
-      view.setUint16(10, 0, true);
-      view.setUint16(12, 0, true);
-      view.setUint32(14, crc, true);
-      view.setUint32(18, fileData.length, true);
-      view.setUint32(22, fileData.length, true);
-      view.setUint16(26, fileName.length, true);
-      view.setUint16(28, 0, true);
-      localHeader.set(fileName, 30);
-
-      // Central directory entry
-      const cdEntry = new Uint8Array(46 + fileName.length);
-      const cdView = new DataView(cdEntry.buffer);
-      cdView.setUint32(0, 0x02014b50, true);
-      cdView.setUint16(4, 20, true);
-      cdView.setUint16(6, 20, true);
-      cdView.setUint16(8, 0, true);
-      cdView.setUint16(10, 0, true);
-      cdView.setUint16(12, 0, true);
-      cdView.setUint16(14, 0, true);
-      cdView.setUint32(16, crc, true);
-      cdView.setUint32(20, fileData.length, true);
-      cdView.setUint32(24, fileData.length, true);
-      cdView.setUint16(28, fileName.length, true);
-      cdView.setUint16(30, 0, true);
-      cdView.setUint16(32, 0, true);
-      cdView.setUint16(34, 0, true);
-      cdView.setUint16(36, 0, true);
-      cdView.setUint32(38, 0, true);
-      cdView.setUint32(42, offset, true);
-      cdEntry.set(fileName, 46);
-
-      parts.push(localHeader, fileData);
-      centralDirectory.push(cdEntry);
-      offset += localHeader.length + fileData.length;
+      const data = new Uint8Array(await file.arrayBuffer());
+      const name = encoder.encode(file.name);
+      const crc = calcCrc32(data);
+      fileInfos.push({ name, data, crc });
+      totalSize += 30 + name.length + data.length; // Local header + data
+      totalSize += 46 + name.length; // Central directory entry
     }
 
-    const cdSize = centralDirectory.reduce((sum, e) => sum + e.length, 0);
-    const eocd = new Uint8Array(22);
-    const eocdView = new DataView(eocd.buffer);
-    eocdView.setUint32(0, 0x06054b50, true);
-    eocdView.setUint16(4, 0, true);
-    eocdView.setUint16(6, 0, true);
-    eocdView.setUint16(8, files.length, true);
-    eocdView.setUint16(10, files.length, true);
-    eocdView.setUint32(12, cdSize, true);
-    eocdView.setUint32(16, offset, true);
-    eocdView.setUint16(20, 0, true);
+    // Create single buffer
+    const buffer = new ArrayBuffer(totalSize);
+    const view = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
+    let pos = 0;
+    let cdStart = 0;
 
-    // Convert all Uint8Array to ArrayBuffer for Blob compatibility
-    const blobParts: ArrayBuffer[] = [];
-    for (const part of parts) {
-      blobParts.push(part.buffer.slice(part.byteOffset, part.byteOffset + part.byteLength));
+    // Write local file headers and data
+    for (const { name, data, crc } of fileInfos) {
+      // Local file header signature
+      view.setUint32(pos, 0x04034b50, true); pos += 4;
+      view.setUint16(pos, 20, true); pos += 2; // version needed
+      view.setUint16(pos, 0, true); pos += 2; // flags
+      view.setUint16(pos, 0, true); pos += 2; // compression (store)
+      view.setUint16(pos, 0, true); pos += 2; // mod time
+      view.setUint16(pos, 0, true); pos += 2; // mod date
+      view.setUint32(pos, crc, true); pos += 4; // crc32
+      view.setUint32(pos, data.length, true); pos += 4; // compressed size
+      view.setUint32(pos, data.length, true); pos += 4; // uncompressed size
+      view.setUint16(pos, name.length, true); pos += 2; // filename length
+      view.setUint16(pos, 0, true); pos += 2; // extra field length
+      bytes.set(name, pos); pos += name.length; // filename
+      bytes.set(data, pos); pos += data.length; // file data
     }
-    for (const cd of centralDirectory) {
-      blobParts.push(cd.buffer.slice(cd.byteOffset, cd.byteOffset + cd.byteLength));
+
+    cdStart = pos;
+
+    // Write central directory
+    let localOffset = 0;
+    for (const { name, data, crc } of fileInfos) {
+      view.setUint32(pos, 0x02014b50, true); pos += 4; // signature
+      view.setUint16(pos, 20, true); pos += 2; // version made by
+      view.setUint16(pos, 20, true); pos += 2; // version needed
+      view.setUint16(pos, 0, true); pos += 2; // flags
+      view.setUint16(pos, 0, true); pos += 2; // compression
+      view.setUint16(pos, 0, true); pos += 2; // mod time
+      view.setUint16(pos, 0, true); pos += 2; // mod date
+      view.setUint32(pos, crc, true); pos += 4; // crc32
+      view.setUint32(pos, data.length, true); pos += 4; // compressed size
+      view.setUint32(pos, data.length, true); pos += 4; // uncompressed size
+      view.setUint16(pos, name.length, true); pos += 2; // filename length
+      view.setUint16(pos, 0, true); pos += 2; // extra field length
+      view.setUint16(pos, 0, true); pos += 2; // comment length
+      view.setUint16(pos, 0, true); pos += 2; // disk number
+      view.setUint16(pos, 0, true); pos += 2; // internal attrs
+      view.setUint32(pos, 0, true); pos += 4; // external attrs
+      view.setUint32(pos, localOffset, true); pos += 4; // local header offset
+      bytes.set(name, pos); pos += name.length; // filename
+      localOffset += 30 + name.length + data.length;
     }
-    blobParts.push(eocd.buffer.slice(eocd.byteOffset, eocd.byteOffset + eocd.byteLength));
-    
-    const blob = new Blob(blobParts, { type: 'application/zip' });
+
+    const cdSize = pos - cdStart;
+
+    // Write end of central directory
+    view.setUint32(pos, 0x06054b50, true); pos += 4; // signature
+    view.setUint16(pos, 0, true); pos += 2; // disk number
+    view.setUint16(pos, 0, true); pos += 2; // cd disk number
+    view.setUint16(pos, fileInfos.length, true); pos += 2; // entries on disk
+    view.setUint16(pos, fileInfos.length, true); pos += 2; // total entries
+    view.setUint32(pos, cdSize, true); pos += 4; // cd size
+    view.setUint32(pos, cdStart, true); pos += 4; // cd offset
+    view.setUint16(pos, 0, true); // comment length
+
     const timestamp = new Date().toISOString().slice(0, 10);
-    return new File([blob], `PurrDrop_${timestamp}.zip`, { type: 'application/zip' });
+    return new File([buffer], `PurrDrop_${timestamp}.zip`, { type: 'application/zip' });
   }, []);
 
   // Handle multi-file selection - auto ZIP if multiple files
