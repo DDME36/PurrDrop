@@ -191,7 +191,8 @@ export default function Home() {
     eocdView.setUint32(16, offset, true);
     eocdView.setUint16(20, 0, true);
 
-    const blob = new Blob([...parts, ...centralDirectory, eocd].map(arr => arr.buffer), { type: 'application/zip' });
+    const allParts = [...parts, ...centralDirectory, eocd];
+    const blob = new Blob(allParts.map(arr => new Uint8Array(arr).buffer as ArrayBuffer), { type: 'application/zip' });
     const timestamp = new Date().toISOString().slice(0, 10);
     return new File([blob], `PurrDrop_${timestamp}.zip`, { type: 'application/zip' });
   }, []);
