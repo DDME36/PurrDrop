@@ -302,7 +302,10 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow: 0 4px 20px rgba(255, 179, 209, 0.3);
+  /* Text stroke for better visibility */
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.6);
+  paint-order: stroke fill;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15)) drop-shadow(0 0 20px rgba(255, 179, 209, 0.4));
   animation: logoShine 3s ease-in-out infinite;
 }
 
