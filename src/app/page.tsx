@@ -97,7 +97,7 @@ export default function Home() {
           id: '',
           name: transferResult.peerName,
           device: '',
-          critter: { type: '', color: '', emoji: '🎉', os: '' },
+          critter: { type: '', color: '', emoji: '🎉', os: 'unknown' as const },
         });
         setShowSuccess(true);
         confettiRef.current?.burst();
