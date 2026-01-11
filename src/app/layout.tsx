@@ -6,8 +6,8 @@ export const metadata: Metadata = {
   description: 'ส่งไฟล์ง่ายๆ ระหว่างอุปกรณ์ในเครือข่ายเดียวกัน',
   manifest: '/manifest.json',
   icons: {
-    icon: '/icon.svg',
-    apple: '/icon.svg',
+    icon: '/favicon.ico',
+    apple: '/apple-icon.png',
   },
   appleWebApp: {
     capable: true,
@@ -35,7 +35,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Mitr:wght@400;500;600;700&display=swap" rel="stylesheet" />
-        <link rel="apple-touch-icon" href="/icon.svg" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body>{children}</body>
