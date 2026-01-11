@@ -10,6 +10,7 @@ import { TransferProgress } from '@/components/TransferProgress';
 import { Confetti, ConfettiRef } from '@/components/Confetti';
 import { Toast, ToastRef } from '@/components/Toast';
 import { Footer } from '@/components/Footer';
+import { BrowserWarning } from '@/components/BrowserWarning';
 import {
   FileOfferModal,
   NameModal,
@@ -29,6 +30,7 @@ import { getHistory, addToHistory, TransferRecord } from '@/lib/transferHistory'
 export default function Home() {
   const {
     connected,
+    connectionStatus,
     myPeer,
     peers,
     fileOffer,
@@ -40,6 +42,7 @@ export default function Home() {
     updateName,
     updateEmoji,
     clearTransferResult,
+    cancelTransfer,
   } = usePeerConnection();
 
   const { muted, toggle: toggleMute, play, vibrate } = useSound();
@@ -314,6 +317,7 @@ export default function Home() {
 
   return (
     <>
+      <BrowserWarning />
       <Clouds />
       <Confetti ref={confettiRef} />
       <Toast ref={toastRef} />
@@ -334,6 +338,7 @@ export default function Home() {
         <MyInfo
           peer={myPeer}
           connected={connected}
+          connectionStatus={connectionStatus}
           onEditName={() => setShowNameModal(true)}
           onEditEmoji={() => setShowEmojiModal(true)}
         />
@@ -361,6 +366,7 @@ export default function Home() {
             status={transfer.status}
             emoji={myPeer?.critter.emoji || '🐱'}
             peerName={transfer.peerName}
+            onCancel={cancelTransfer}
           />
         )}
 

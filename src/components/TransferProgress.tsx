@@ -10,6 +10,7 @@ interface TransferProgressProps {
   emoji: string;
   peerName: string;
   onComplete?: () => void;
+  onCancel?: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -28,7 +29,7 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')} นาที`;
 }
 
-export function TransferProgress({ fileName, fileSize, progress, status, emoji, peerName, onComplete }: TransferProgressProps) {
+export function TransferProgress({ fileName, fileSize, progress, status, emoji, peerName, onComplete, onCancel }: TransferProgressProps) {
   const [speed, setSpeed] = useState(0);
   const [eta, setEta] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(0);
@@ -219,6 +220,21 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
                     <span className="stat-icon">⏱️</span>
                     <span>{formatTime(eta)}</span>
                   </div>
+                </div>
+              )}
+
+              {isActive && onCancel && (
+                <button className="transfer-cancel-btn" onClick={onCancel}>
+                  ยกเลิก
+                </button>
+              )}
+
+              {status === 'error' && (
+                <div className="transfer-error">
+                  <p>การเชื่อมต่อล้มเหลว</p>
+                  <button className="transfer-cancel-btn" onClick={onCancel}>
+                    ปิด
+                  </button>
                 </div>
               )}
             </>

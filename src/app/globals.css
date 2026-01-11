@@ -529,15 +529,35 @@ body {
   transition: all 0.3s;
 }
 
-.status-dot.online {
+.status-dot.connected {
   background: var(--accent-mint);
   box-shadow: 0 0 12px var(--accent-mint);
   animation: statusPulse 2s ease-in-out infinite;
 }
 
+.status-dot.connecting {
+  background: var(--accent-peach);
+  animation: statusBlink 1s ease-in-out infinite;
+}
+
+.status-dot.reconnecting {
+  background: #fbbf24;
+  animation: statusBlink 0.5s ease-in-out infinite;
+}
+
+.status-dot.disconnected {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
 @keyframes statusPulse {
   0%, 100% { box-shadow: 0 0 8px var(--accent-mint); }
   50% { box-shadow: 0 0 16px var(--accent-mint), 0 0 24px var(--accent-mint); }
+}
+
+@keyframes statusBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 /* Empty State */
@@ -1336,6 +1356,57 @@ body {
   justify-content: center;
   gap: 16px;
   margin-top: 8px;
+}
+
+/* Cancel Button */
+.transfer-cancel-btn {
+  margin-top: 16px;
+  padding: 12px 32px;
+  background: transparent;
+  border: 2px solid rgba(255, 107, 157, 0.5);
+  border-radius: 50px;
+  color: var(--accent-pink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.transfer-cancel-btn:hover {
+  background: var(--accent-pink);
+  border-color: var(--accent-pink);
+  color: white;
+  transform: scale(1.05);
+}
+
+.transfer-cancel-btn:active {
+  transform: scale(0.98);
+}
+
+[data-theme="dark"] .transfer-cancel-btn {
+  border-color: rgba(255, 107, 157, 0.4);
+  color: var(--accent-pink);
+}
+
+[data-theme="dark"] .transfer-cancel-btn:hover {
+  background: var(--accent-pink);
+  color: white;
+}
+
+/* Error State */
+.transfer-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.transfer-error p {
+  font-size: 14px;
+  color: #ef4444;
+  margin: 0;
 }
 
 .transfer-stat {
@@ -2443,4 +2514,81 @@ body {
   .credit {
     font-size: 10px;
   }
+}
+
+
+/* Browser Warning */
+.browser-warning-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.browser-warning-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  animation: modalScaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.warning-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.warning-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.warning-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.warning-url {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-cream);
+  padding: 10px;
+  border-radius: 8px;
+  word-break: break-all;
+  margin-bottom: 20px;
+}
+
+.warning-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.warning-actions .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.warning-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
 }

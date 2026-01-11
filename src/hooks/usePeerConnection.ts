@@ -27,6 +27,8 @@ interface TransferResult {
   peerName: string;
 }
 
+export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
+
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -39,6 +41,7 @@ const RETRY_DELAY = 2000;
 
 export function usePeerConnection() {
   const [connected, setConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const [myPeer, setMyPeer] = useState<Peer | null>(null);
   const [peers, setPeers] = useState<Peer[]>([]);
   const [fileOffer, setFileOffer] = useState<FileOffer | null>(null);
@@ -52,6 +55,27 @@ export function usePeerConnection() {
   const receivingFilesRef = useRef<Map<string, { chunks: ArrayBuffer[]; info: { name: string; size: number; type: string } }>>(new Map());
   const myPeerRef = useRef<Peer | null>(null);
   const peersRef = useRef<Peer[]>([]);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // Wake Lock - prevent screen from sleeping during transfer
+  const requestWakeLock = useCallback(async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        console.log('🔒 Wake Lock acquired');
+      } catch (err) {
+        console.log('Wake Lock not available:', err);
+      }
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release();
+      wakeLockRef.current = null;
+      console.log('🔓 Wake Lock released');
+    }
+  }, []);
 
   // Keep refs in sync
   useEffect(() => { myPeerRef.current = myPeer; }, [myPeer]);
@@ -121,6 +145,12 @@ export function usePeerConnection() {
               chunks: [],
               info: { name: msg.name, size: msg.size, type: msg.mimeType },
             });
+            // Request wake lock when receiving
+            if ('wakeLock' in navigator) {
+              navigator.wakeLock.request('screen').then(lock => {
+                wakeLockRef.current = lock;
+              }).catch(() => {});
+            }
             setTransfer({
               peerId,
               peerName: senderPeer?.name || 'ไม่ทราบชื่อ',
@@ -147,6 +177,11 @@ export function usePeerConnection() {
               });
               
               receivingFilesRef.current.delete(msg.fileId);
+              // Release wake lock after receive complete
+              if (wakeLockRef.current) {
+                wakeLockRef.current.release();
+                wakeLockRef.current = null;
+              }
               // Let TransferProgress component handle the display timing
               setTimeout(() => setTransfer(null), 8000);
             }
@@ -206,6 +241,9 @@ export function usePeerConnection() {
   // Send file via WebRTC with retry logic
   const sendFileViaWebRTC = useCallback(async (peerId: string, file: File, fileId: string, targetPeer: Peer, retryCount = 0) => {
     console.log(`📤 Starting WebRTC transfer to ${peerId} (attempt ${retryCount + 1})`);
+    
+    // Request wake lock to prevent screen sleep
+    await requestWakeLock();
     
     setTransfer({
       peerId,
@@ -296,6 +334,9 @@ export function usePeerConnection() {
         peerName: targetPeer.name,
       });
       
+      // Release wake lock after transfer complete
+      releaseWakeLock();
+      
       // Let TransferProgress component handle the display timing
       setTimeout(() => setTransfer(null), 8000);
       
@@ -319,6 +360,9 @@ export function usePeerConnection() {
         return sendFileViaWebRTC(peerId, file, fileId, targetPeer, retryCount + 1);
       }
       
+      // Release wake lock on error
+      releaseWakeLock();
+      
       setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
       setTransferResult({
         success: false,
@@ -328,7 +372,7 @@ export function usePeerConnection() {
       });
       setTimeout(() => setTransfer(null), 5000);
     }
-  }, [createPeerConnection, setupDataChannel]);
+  }, [createPeerConnection, setupDataChannel, requestWakeLock, releaseWakeLock]);
 
   // Initialize socket connection
   useEffect(() => {
@@ -356,6 +400,9 @@ export function usePeerConnection() {
     const socket = io({
       transports: ['websocket', 'polling'],
       reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
     
     socketRef.current = socket;
@@ -363,12 +410,31 @@ export function usePeerConnection() {
     socket.on('connect', () => {
       console.log('🔌 Socket connected');
       setConnected(true);
+      setConnectionStatus('connected');
       socket.emit('join', peer);
     });
 
     socket.on('disconnect', () => {
       console.log('🔌 Socket disconnected');
       setConnected(false);
+      setConnectionStatus('disconnected');
+    });
+
+    socket.on('reconnecting', () => {
+      console.log('🔄 Socket reconnecting...');
+      setConnectionStatus('reconnecting');
+    });
+
+    socket.on('reconnect', () => {
+      console.log('✅ Socket reconnected');
+      setConnected(true);
+      setConnectionStatus('connected');
+      socket.emit('join', peer);
+    });
+
+    socket.on('reconnect_failed', () => {
+      console.log('❌ Socket reconnection failed');
+      setConnectionStatus('disconnected');
     });
 
     socket.on('peers', (peerList: Peer[]) => {
@@ -504,8 +570,23 @@ export function usePeerConnection() {
     setTransferResult(null);
   }, []);
 
+  const cancelTransfer = useCallback(() => {
+    // Close all peer connections
+    peerConnectionsRef.current.forEach((pc, peerId) => {
+      pc.close();
+      peerConnectionsRef.current.delete(peerId);
+    });
+    dataChannelsRef.current.clear();
+    pendingFilesRef.current.clear();
+    receivingFilesRef.current.clear();
+    releaseWakeLock();
+    setTransfer(null);
+    setFileOffer(null);
+  }, [releaseWakeLock]);
+
   return {
     connected,
+    connectionStatus,
     myPeer,
     peers,
     fileOffer,
@@ -517,5 +598,6 @@ export function usePeerConnection() {
     updateName,
     updateEmoji,
     clearTransferResult,
+    cancelTransfer,
   };
 }

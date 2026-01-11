@@ -2,15 +2,24 @@
 
 import { Peer } from '@/lib/critters';
 import { useTheme } from '@/hooks/useTheme';
+import { ConnectionStatus } from '@/hooks/usePeerConnection';
 
 interface MyInfoProps {
   peer: Peer | null;
   connected: boolean;
+  connectionStatus: ConnectionStatus;
   onEditName: () => void;
   onEditEmoji: () => void;
 }
 
-export function MyInfo({ peer, connected, onEditName, onEditEmoji }: MyInfoProps) {
+const statusText: Record<ConnectionStatus, string> = {
+  connecting: 'กำลังเชื่อมต่อ...',
+  connected: 'เชื่อมต่อแล้ว',
+  reconnecting: 'กำลังเชื่อมต่อใหม่...',
+  disconnected: 'ออฟไลน์',
+};
+
+export function MyInfo({ peer, connected, connectionStatus, onEditName, onEditEmoji }: MyInfoProps) {
   const { isDark } = useTheme();
   
   const avatarGradient = peer 
@@ -33,8 +42,8 @@ export function MyInfo({ peer, connected, onEditName, onEditEmoji }: MyInfoProps
           {peer?.name || 'กำลังเชื่อมต่อ...'}
         </div>
         <div className="my-critter-status">
-          <span className={`status-dot ${connected ? 'online' : ''}`} />
-          <span>{connected ? 'เชื่อมต่อแล้ว' : 'ออฟไลน์'}</span>
+          <span className={`status-dot ${connectionStatus}`} />
+          <span>{statusText[connectionStatus]}</span>
         </div>
       </div>
     </div>
