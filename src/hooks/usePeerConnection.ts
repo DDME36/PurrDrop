@@ -376,6 +376,13 @@ export function usePeerConnection() {
 
   // Initialize socket connection
   useEffect(() => {
+    // Don't connect if in In-App Browser
+    if (typeof window !== 'undefined' && sessionStorage.getItem('purrdrop_inapp') === 'true') {
+      console.log('🚫 In-App Browser detected, not connecting');
+      setConnectionStatus('disconnected');
+      return;
+    }
+
     let sessionId = localStorage.getItem('critters_session_id');
     if (!sessionId) {
       sessionId = uuidv4().slice(0, 8);
