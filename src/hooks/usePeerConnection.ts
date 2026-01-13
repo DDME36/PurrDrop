@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { v4 as uuidv4 } from 'uuid';
 import { Peer, assignCritter, getDeviceName, generateCuteName } from '@/lib/critters';
+import { createStreamWriter, shouldUseStreaming, StreamWriter } from '@/lib/streamSaver';
 
 interface FileOffer {
   from: Peer;
@@ -28,8 +29,15 @@ interface TransferResult {
 }
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
+export type DiscoveryMode = 'public' | 'wifi' | 'private';
 
-const ICE_SERVERS = [
+export interface PeerWithMeta extends Peer {
+  sameNetwork?: boolean;
+  inRoom?: boolean;
+}
+
+// ICE Servers - STUN only (free)
+const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
@@ -43,7 +51,9 @@ export function usePeerConnection() {
   const [connected, setConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const [myPeer, setMyPeer] = useState<Peer | null>(null);
-  const [peers, setPeers] = useState<Peer[]>([]);
+  const [peers, setPeers] = useState<PeerWithMeta[]>([]);
+  const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode>('public');
+  const [roomCode, setRoomCode] = useState<string | null>(null);
   const [fileOffer, setFileOffer] = useState<FileOffer | null>(null);
   const [transfer, setTransfer] = useState<TransferProgress | null>(null);
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
@@ -52,9 +62,15 @@ export function usePeerConnection() {
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannelsRef = useRef<Map<string, RTCDataChannel>>(new Map());
   const pendingFilesRef = useRef<Map<string, { file: File; peer: Peer }>>(new Map());
-  const receivingFilesRef = useRef<Map<string, { chunks: ArrayBuffer[]; info: { name: string; size: number; type: string } }>>(new Map());
+  const receivingFilesRef = useRef<Map<string, { 
+    chunks: ArrayBuffer[]; 
+    info: { name: string; size: number; type: string };
+    streamWriter?: StreamWriter;
+    useStreaming: boolean;
+    received: number;
+  }>>(new Map());
   const myPeerRef = useRef<Peer | null>(null);
-  const peersRef = useRef<Peer[]>([]);
+  const peersRef = useRef<PeerWithMeta[]>([]);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   // Wake Lock - prevent screen from sleeping during transfer
@@ -133,7 +149,7 @@ export function usePeerConnection() {
       console.error(`DataChannel error:`, e);
     };
 
-    channel.onmessage = (e) => {
+    channel.onmessage = async (e) => {
       if (typeof e.data === 'string') {
         try {
           const msg = JSON.parse(e.data);
@@ -141,10 +157,27 @@ export function usePeerConnection() {
           
           if (msg.type === 'file-start') {
             const senderPeer = peersRef.current.find(p => p.id === peerId);
+            const useStreaming = shouldUseStreaming(msg.size);
+            
+            // For large files, try to use streaming
+            let streamWriter: StreamWriter | undefined;
+            if (useStreaming) {
+              console.log(`📁 Large file (${(msg.size / 1024 / 1024).toFixed(1)}MB) - using streaming`);
+              try {
+                streamWriter = await createStreamWriter(msg.name, msg.mimeType, msg.size);
+              } catch (err) {
+                console.log('Streaming not available, using memory buffer:', err);
+              }
+            }
+            
             receivingFilesRef.current.set(msg.fileId, {
               chunks: [],
               info: { name: msg.name, size: msg.size, type: msg.mimeType },
+              streamWriter,
+              useStreaming: !!streamWriter,
+              received: 0,
             });
+            
             // Request wake lock when receiving
             if ('wakeLock' in navigator) {
               navigator.wakeLock.request('screen').then(lock => {
@@ -163,8 +196,16 @@ export function usePeerConnection() {
             const receiving = receivingFilesRef.current.get(msg.fileId);
             if (receiving) {
               console.log(`✅ File complete: ${receiving.info.name}`);
-              const blob = new Blob(receiving.chunks, { type: receiving.info.type || 'application/octet-stream' });
-              downloadBlob(blob, receiving.info.name);
+              
+              if (receiving.streamWriter) {
+                // Streaming mode - just close the writer
+                await receiving.streamWriter.close();
+                console.log('📁 Stream closed - file saved');
+              } else {
+                // Memory mode - create blob and download
+                const blob = new Blob(receiving.chunks, { type: receiving.info.type || 'application/octet-stream' });
+                downloadBlob(blob, receiving.info.name);
+              }
               
               setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
               
@@ -195,9 +236,17 @@ export function usePeerConnection() {
         if (fileId) {
           const receiving = receivingFilesRef.current.get(fileId);
           if (receiving) {
-            receiving.chunks.push(e.data);
-            const received = receiving.chunks.reduce((acc, c) => acc + c.byteLength, 0);
-            const progress = Math.round((received / receiving.info.size) * 100);
+            receiving.received += e.data.byteLength;
+            
+            if (receiving.streamWriter) {
+              // Streaming mode - write directly to disk
+              await receiving.streamWriter.write(e.data);
+            } else {
+              // Memory mode - collect chunks
+              receiving.chunks.push(e.data);
+            }
+            
+            const progress = Math.round((receiving.received / receiving.info.size) * 100);
             setTransfer(prev => prev ? { ...prev, progress } : null);
           }
         }
@@ -444,11 +493,22 @@ export function usePeerConnection() {
       setConnectionStatus('disconnected');
     });
 
-    socket.on('peers', (peerList: Peer[]) => {
+    socket.on('peers', (peerList: PeerWithMeta[]) => {
       setPeers(peerList.filter(p => p.id !== sessionId));
     });
 
-    socket.on('peer-joined', (newPeer: Peer) => {
+    socket.on('room-info', ({ roomCode: code }: { roomCode: string }) => {
+      console.log('🏠 Room code:', code);
+      setRoomCode(code);
+    });
+
+    socket.on('mode-info', ({ mode, roomCode: code }: { mode: DiscoveryMode; roomCode: string | null }) => {
+      console.log('🔄 Mode:', mode, 'Room:', code);
+      setDiscoveryMode(mode);
+      setRoomCode(code);
+    });
+
+    socket.on('peer-joined', (newPeer: PeerWithMeta) => {
       setPeers(prev => {
         const filtered = prev.filter(p => p.id !== newPeer.id);
         return [...filtered, newPeer];
@@ -585,17 +645,45 @@ export function usePeerConnection() {
     });
     dataChannelsRef.current.clear();
     pendingFilesRef.current.clear();
+    
+    // Abort any streaming writers
+    receivingFilesRef.current.forEach(receiving => {
+      if (receiving.streamWriter) {
+        receiving.streamWriter.abort();
+      }
+    });
     receivingFilesRef.current.clear();
+    
     releaseWakeLock();
     setTransfer(null);
     setFileOffer(null);
   }, [releaseWakeLock]);
+
+  const joinRoom = useCallback((code: string) => {
+    if (!socketRef.current) return;
+    console.log('🚪 Joining room:', code);
+    socketRef.current.emit('set-mode', { mode: 'private', roomCode: code });
+  }, []);
+
+  const createRoom = useCallback(() => {
+    if (!socketRef.current) return;
+    console.log('✨ Creating new room');
+    socketRef.current.emit('set-mode', { mode: 'private' });
+  }, []);
+
+  const setMode = useCallback((mode: DiscoveryMode, code?: string) => {
+    if (!socketRef.current) return;
+    console.log('🔄 Setting mode:', mode, code);
+    socketRef.current.emit('set-mode', { mode, roomCode: code });
+  }, []);
 
   return {
     connected,
     connectionStatus,
     myPeer,
     peers,
+    discoveryMode,
+    roomCode,
     fileOffer,
     transfer,
     transferResult,
@@ -606,5 +694,8 @@ export function usePeerConnection() {
     updateEmoji,
     clearTransferResult,
     cancelTransfer,
+    joinRoom,
+    createRoom,
+    setMode,
   };
 }

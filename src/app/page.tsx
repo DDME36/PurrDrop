@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Clouds } from '@/components/Clouds';
 import { Header } from '@/components/Header';
 import { MyInfo } from '@/components/MyInfo';
+import { ModeSelector } from '@/components/ModeSelector';
 import { EmptyState } from '@/components/EmptyState';
 import { PeersGrid } from '@/components/PeersGrid';
 import { TransferProgress } from '@/components/TransferProgress';
@@ -33,6 +34,8 @@ export default function Home() {
     connectionStatus,
     myPeer,
     peers,
+    discoveryMode,
+    roomCode,
     fileOffer,
     transfer,
     transferResult,
@@ -43,6 +46,7 @@ export default function Home() {
     updateEmoji,
     clearTransferResult,
     cancelTransfer,
+    setMode,
   } = usePeerConnection();
 
   const { muted, toggle: toggleMute, play, vibrate } = useSound();
@@ -56,8 +60,9 @@ export default function Home() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [newPeerIds, setNewPeerIds] = useState<Set<string>>(new Set());
-  const [url, setUrl] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
   const [history, setHistory] = useState<TransferRecord[]>([]);
+  const [initialModeSet, setInitialModeSet] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedPeerRef = useRef<Peer | null>(null);
@@ -69,6 +74,35 @@ export default function Home() {
   useEffect(() => {
     setHistory(getHistory());
   }, []);
+
+  // Handle URL params for mode/room on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Set base URL (without params)
+    const url = new URL(window.location.href);
+    url.search = '';
+    setBaseUrl(url.toString());
+    
+    // Check for mode params
+    const params = new URLSearchParams(window.location.search);
+    const modeParam = params.get('mode');
+    const roomParam = params.get('room');
+    
+    if (modeParam && !initialModeSet && connected) {
+      if (modeParam === 'wifi') {
+        setMode('wifi');
+        toastRef.current?.show('เข้าโหมด WiFi แล้ว', 'info');
+      } else if (modeParam === 'private' && roomParam) {
+        setMode('private', roomParam);
+        toastRef.current?.show(`เข้าห้อง ${roomParam} แล้ว`, 'info');
+      }
+      setInitialModeSet(true);
+      
+      // Clean URL params
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [connected, initialModeSet, setMode]);
 
   // Request notification permission on first interaction
   useEffect(() => {
@@ -104,15 +138,10 @@ export default function Home() {
     prevPeerIdsRef.current = currentIds;
   }, [peers, play, notifyPeerJoined]);
 
-  // Get URL for QR + Register Service Worker
+  // Register service worker for PWA
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setUrl(window.location.href);
-      
-      // Register service worker for PWA
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(console.error);
-      }
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(console.error);
     }
   }, []);
 
@@ -152,10 +181,48 @@ export default function Home() {
     }
   }, [transferResult, clearTransferResult]);
 
-  // Create ZIP file
+  // Smart ZIP - ฉลาดเลือกว่าจะบีบหรือไม่
   const createZipFile = useCallback(async (files: File[]): Promise<File> => {
-    let totalSize = 22;
-    const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number }[] = [];
+    // ไฟล์ที่บีบแล้วไม่เล็กลง (already compressed)
+    const SKIP_COMPRESS_TYPES = new Set([
+      // Images
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
+      // Video
+      'video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska',
+      // Audio
+      'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm', 'audio/aac',
+      // Archives
+      'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
+      'application/gzip', 'application/x-bzip2',
+      // Documents (already compressed)
+      'application/pdf',
+    ]);
+    
+    const SKIP_COMPRESS_EXT = new Set([
+      '.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.heic',
+      '.mp4', '.mkv', '.avi', '.mov', '.webm',
+      '.mp3', '.aac', '.ogg', '.m4a', '.flac',
+      '.zip', '.rar', '.7z', '.gz', '.bz2', '.xz',
+      '.pdf', '.docx', '.xlsx', '.pptx',
+    ]);
+    
+    const shouldCompress = (file: File): boolean => {
+      if (SKIP_COMPRESS_TYPES.has(file.type)) return false;
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (SKIP_COMPRESS_EXT.has(ext)) return false;
+      // ไฟล์ใหญ่กว่า 50MB ไม่บีบ (กัน CPU ค้าง)
+      if (file.size > 50 * 1024 * 1024) return false;
+      return true;
+    };
+
+    // ถ้าไฟล์ใหญ่รวมกัน > 100MB แจ้งเตือน
+    const totalSize = files.reduce((acc, f) => acc + f.size, 0);
+    if (totalSize > 100 * 1024 * 1024) {
+      console.log(`⚠️ Large ZIP: ${(totalSize / 1024 / 1024).toFixed(1)}MB - using Store mode`);
+    }
+
+    let zipSize = 22;
+    const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number; compressed: boolean }[] = [];
     const encoder = new TextEncoder();
     
     const crc32Table: number[] = [];
@@ -179,35 +246,41 @@ export default function Home() {
       const data = new Uint8Array(await file.arrayBuffer());
       const name = encoder.encode(file.name);
       const crc = calcCrc32(data);
-      fileInfos.push({ name, data, crc });
-      totalSize += 30 + name.length + data.length;
-      totalSize += 46 + name.length;
+      const compress = shouldCompress(file);
+      
+      console.log(`📦 ${file.name}: ${compress ? 'compress' : 'store'} (${file.type || 'unknown'})`);
+      
+      fileInfos.push({ name, data, crc, compressed: compress });
+      zipSize += 30 + name.length + data.length;
+      zipSize += 46 + name.length;
     }
 
-    const buffer = new ArrayBuffer(totalSize);
+    const buffer = new ArrayBuffer(zipSize);
     const view = new DataView(buffer);
     const bytes = new Uint8Array(buffer);
     let pos = 0;
     let cdStart = 0;
 
+    // Local file headers + data
     for (const { name, data, crc } of fileInfos) {
-      view.setUint32(pos, 0x04034b50, true); pos += 4;
-      view.setUint16(pos, 20, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint32(pos, 0x04034b50, true); pos += 4; // signature
+      view.setUint16(pos, 20, true); pos += 2; // version
+      view.setUint16(pos, 0, true); pos += 2; // flags
+      view.setUint16(pos, 0, true); pos += 2; // compression (0 = store)
+      view.setUint16(pos, 0, true); pos += 2; // mod time
+      view.setUint16(pos, 0, true); pos += 2; // mod date
       view.setUint32(pos, crc, true); pos += 4;
-      view.setUint32(pos, data.length, true); pos += 4;
-      view.setUint32(pos, data.length, true); pos += 4;
+      view.setUint32(pos, data.length, true); pos += 4; // compressed size
+      view.setUint32(pos, data.length, true); pos += 4; // uncompressed size
       view.setUint16(pos, name.length, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
+      view.setUint16(pos, 0, true); pos += 2; // extra field length
       bytes.set(name, pos); pos += name.length;
       bytes.set(data, pos); pos += data.length;
     }
 
     cdStart = pos;
 
+    // Central directory
     let localOffset = 0;
     for (const { name, data, crc } of fileInfos) {
       view.setUint32(pos, 0x02014b50, true); pos += 4;
@@ -233,6 +306,7 @@ export default function Home() {
 
     const cdSize = pos - cdStart;
 
+    // End of central directory
     view.setUint32(pos, 0x06054b50, true); pos += 4;
     view.setUint16(pos, 0, true); pos += 2;
     view.setUint16(pos, 0, true); pos += 2;
@@ -343,11 +417,18 @@ export default function Home() {
           onEditEmoji={() => setShowEmojiModal(true)}
         />
 
+        <ModeSelector
+          mode={discoveryMode}
+          roomCode={roomCode}
+          onChangeMode={setMode}
+        />
+
         {peers.length === 0 ? (
           <EmptyState
             emoji={myPeer?.critter.emoji || '🐱'}
             onShowQR={() => setShowQRModal(true)}
             onShowHelp={() => setShowHelpModal(true)}
+            onShowFeedback={() => setShowFeedbackModal(true)}
           />
         ) : (
           <PeersGrid
@@ -378,7 +459,8 @@ export default function Home() {
           onChange={handleFileSelect}
         />
 
-        <Footer onFeedback={() => setShowFeedbackModal(true)} />
+        {/* Show fixed footer only when peers exist, or always on desktop */}
+        <Footer onFeedback={() => setShowFeedbackModal(true)} hasPeers={peers.length > 0} />
       </div>
 
       {/* Modals */}
@@ -408,7 +490,9 @@ export default function Home() {
 
       <QRModal
         show={showQRModal}
-        url={url}
+        baseUrl={baseUrl}
+        currentMode={discoveryMode}
+        roomCode={roomCode}
         onClose={() => setShowQRModal(false)}
       />
 

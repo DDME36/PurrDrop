@@ -15,15 +15,27 @@ export function HelpModal({ show, onClose }: HelpModalProps) {
         <div className="help-steps">
           <div className="help-step">
             <div className="step-icon">📱</div>
-            <div className="step-text">เปิด PurrDrop ในอุปกรณ์อื่น<br />ที่ใช้ Wi-Fi เดียวกัน</div>
+            <div className="step-text">เปิด PurrDrop ในอุปกรณ์อื่น</div>
+          </div>
+          <div className="help-step">
+            <div className="step-icon">🔄</div>
+            <div className="step-text">
+              เลือกโหมดเดียวกัน:
+              <br />
+              <small>🌐 สาธารณะ - เห็นทุกคน</small>
+              <br />
+              <small>📶 WiFi - เฉพาะเครือข่ายเดียวกัน</small>
+              <br />
+              <small>🔐 ส่วนตัว - ใช้รหัสห้อง 5 หลัก</small>
+            </div>
           </div>
           <div className="help-step">
             <div className="step-icon">👆</div>
-            <div className="step-text">แตะที่ Critter ของเพื่อน<br />ที่ต้องการส่งไฟล์ให้</div>
+            <div className="step-text">แตะที่เพื่อนที่ต้องการส่งไฟล์</div>
           </div>
           <div className="help-step">
             <div className="step-icon">🎁</div>
-            <div className="step-text">เลือกไฟล์หรือถ่ายรูป<br />แล้วส่งเลย!</div>
+            <div className="step-text">เลือกไฟล์แล้วส่งเลย!</div>
           </div>
         </div>
         <button className="btn btn-close-modal" onClick={onClose}>เข้าใจแล้ว!</button>
