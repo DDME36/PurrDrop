@@ -382,20 +382,18 @@ app.prepare().then(() => {
       }
     });
 
-    // WebRTC Signaling
+    // WebRTC Signaling - broadcast to all sockets of peer
     socket.on('rtc-offer', (data) => {
       try {
         if (!data || !data.to || !data.offer) return;
         const targetPeer = peers.get(data.to);
         const senderPeer = getPeerBySocketId(socket.id);
         if (targetPeer && senderPeer) {
-          const targetSocketId = Array.from(targetPeer.sockets)[0];
-          if (targetSocketId) {
-            io.to(targetSocketId).emit('rtc-offer', {
-              from: senderPeer.id,
-              offer: data.offer,
-            });
-          }
+          // Send to ALL sockets of target peer (handles multiple tabs)
+          emitToPeer(io, targetPeer, 'rtc-offer', {
+            from: senderPeer.id,
+            offer: data.offer,
+          });
         }
       } catch (err) {
         console.error('Error in rtc-offer handler:', err);
@@ -408,13 +406,11 @@ app.prepare().then(() => {
         const targetPeer = peers.get(data.to);
         const senderPeer = getPeerBySocketId(socket.id);
         if (targetPeer && senderPeer) {
-          const targetSocketId = Array.from(targetPeer.sockets)[0];
-          if (targetSocketId) {
-            io.to(targetSocketId).emit('rtc-answer', {
-              from: senderPeer.id,
-              answer: data.answer,
-            });
-          }
+          // Send to ALL sockets of target peer
+          emitToPeer(io, targetPeer, 'rtc-answer', {
+            from: senderPeer.id,
+            answer: data.answer,
+          });
         }
       } catch (err) {
         console.error('Error in rtc-answer handler:', err);
@@ -426,14 +422,12 @@ app.prepare().then(() => {
         if (!data || !data.to) return;
         const targetPeer = peers.get(data.to);
         const senderPeer = getPeerBySocketId(socket.id);
-        if (targetPeer && senderPeer) {
-          const targetSocketId = Array.from(targetPeer.sockets)[0];
-          if (targetSocketId && data.candidate) {
-            io.to(targetSocketId).emit('rtc-ice', {
-              from: senderPeer.id,
-              candidate: data.candidate,
-            });
-          }
+        if (targetPeer && senderPeer && data.candidate) {
+          // Send to ALL sockets of target peer
+          emitToPeer(io, targetPeer, 'rtc-ice', {
+            from: senderPeer.id,
+            candidate: data.candidate,
+          });
         }
       } catch (err) {
         console.error('Error in rtc-ice handler:', err);

@@ -2,10 +2,15 @@
   "name": "purrdrop",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "next build",
-    "start": "tsx server.ts",
+    "build": "next build && npm run build:server",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "node dist/server.js",
+    "start:dev": "tsx server.ts",
     "lint": "eslint"
   },
   "dependencies": {

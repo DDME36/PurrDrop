@@ -27,8 +27,30 @@
 | Mode | Icon | Description |
 |------|------|-------------|
 | **Public** | 🌐 | เห็นทุกคนที่ใช้งาน |
-| **WiFi** | 📶 | เห็นเฉพาะคนในเครือข่ายเดียวกัน |
-| **Private** | 🔐 | เห็นเฉพาะคนที่มีรหัสห้อง (+ password) |
+| **WiFi** | 📶 | เห็นเฉพาะคนที่มี Public IP เดียวกัน |
+| **Private** | 🔐 | เห็นเฉพาะคนที่มีรหัสห้อง + password |
+
+## � Security Model
+
+### ✅ สิ่งที่ปลอดภัย
+- **ไฟล์ไม่ผ่าน Server** - ส่งตรง P2P ระหว่าง browsers
+- **WebRTC มี DTLS encryption** - ข้อมูลเข้ารหัสระหว่างทาง
+- **Private mode** - ใช้รหัสห้อง 5 หลัก + password (optional)
+- **Server เห็นแค่ metadata** - ชื่อ, device type, IP (สำหรับ matching)
+
+### ⚠️ ข้อควรระวัง
+- **Public mode** - ทุกคนที่เปิดเว็บจะเห็นคุณ
+- **WiFi mode บน Cloud** - ใช้ Public IP matching ซึ่งอาจไม่แม่นยำ 100%
+- **ไม่มี E2E encryption เพิ่มเติม** - พึ่ง DTLS ของ WebRTC
+
+## ⚡ Known Limitations
+
+| ข้อจำกัด | สาเหตุ | วิธีแก้ |
+|---------|--------|--------|
+| **WiFi mode อาจเห็นคนผิด** | ISP บางเจ้าใช้ CGNAT (IP ซ้ำกัน) | ใช้ Private mode แทน |
+| **ส่งไฟล์ข้าม network ไม่ได้** | NAT บางประเภทบล็อก WebRTC | ใช้ WiFi เดียวกัน หรือ hotspot |
+| **iOS Safari download** | ไม่รองรับ download attribute | เปิด tab ใหม่ให้ save เอง |
+| **VPN ทำให้ไม่เจอกัน** | IP เปลี่ยน | ปิด VPN หรือใช้ Private mode |
 
 ## 🚀 Quick Start
 
@@ -40,8 +62,12 @@ cd PurrDrop
 # Install
 npm install
 
-# Run
+# Development
 npm run dev
+
+# Production build
+npm run build
+npm start
 ```
 
 เปิด http://localhost:3000
