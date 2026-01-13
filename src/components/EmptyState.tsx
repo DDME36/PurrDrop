@@ -29,11 +29,14 @@ export function EmptyState({ emoji, onShowQR, onShowHelp, onShowFeedback }: Empt
         </button>
       </div>
       
-      {/* Mobile only - inline feedback */}
-      <div className="empty-footer-mobile">
-        <button className="feedback-btn" onClick={onShowFeedback}>
+      {/* Feedback button - inline (ไม่ fixed) */}
+      <div className="empty-feedback">
+        <button className="feedback-badge" onClick={onShowFeedback}>
           💬 Feedback
         </button>
+      </div>
+      
+      <div className="empty-footer-mobile">
         <div className="footer-credit">by ddme36 (Dome)</div>
       </div>
     </div>

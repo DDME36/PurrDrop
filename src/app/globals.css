@@ -310,6 +310,21 @@ body {
   padding-bottom: 120px;
   position: relative;
   z-index: 1;
+  width: 100%;
+}
+
+/* Tablet/iPad override */
+@media screen and (min-width: 600px) {
+  .app {
+    max-width: 85vw;
+    max-width: min(750px, 85vw);
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  .app {
+    max-width: min(900px, 80vw);
+  }
 }
 
 /* Header */
@@ -682,7 +697,7 @@ body {
   text-align: center;
 }
 
-/* App Footer - fixed at bottom */
+/* App Footer - fixed at bottom (แสดงเฉพาะเมื่อมี peers) */
 .app-footer {
   position: fixed;
   bottom: 0;
@@ -696,6 +711,42 @@ body {
   width: 100%;
   max-width: 700px;
   z-index: 50;
+}
+
+.app-footer.no-peers {
+  display: none;
+}
+
+/* Feedback badge in empty state */
+.empty-feedback {
+  margin-top: 20px;
+}
+
+.feedback-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, var(--accent-pink), #ff8fab);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 107, 157, 0.4);
+}
+
+.feedback-badge:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 20px rgba(255, 107, 157, 0.5);
+}
+
+.feedback-badge:active {
+  transform: scale(0.98);
 }
 
 .feedback-btn {
@@ -817,6 +868,22 @@ body {
 .btn-pastel.mint:hover .btn-icon {
   background: rgba(255, 255, 255, 0.3);
   color: #2d6a4f;
+}
+
+.btn-pastel.lavender .btn-icon {
+  background: rgba(199, 206, 234, 0.3);
+  color: #6b73a0;
+}
+
+.btn-pastel.lavender:hover { 
+  background: var(--accent-lavender); 
+  border-color: var(--accent-lavender);
+  color: white;
+}
+
+.btn-pastel.lavender:hover .btn-icon {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
 }
 
 .btn-accept {
@@ -2022,115 +2089,118 @@ body {
   .empty-footer-mobile .feedback-btn { padding: 6px 14px; font-size: 11px; }
 }
 
-/* Tablet (iPad) */
-@media (min-width: 481px) and (max-width: 1024px) {
+/* Tablet (iPad) - ครอบคลุม iPad ทุกรุ่น */
+@media screen and (min-width: 600px) and (max-width: 1366px) {
   .app { 
-    max-width: 700px; 
-    padding: 20px 30px;
+    max-width: 750px !important; 
+    padding: 16px 24px !important;
+    width: 90% !important;
   }
   
   .header {
-    padding: 16px 0;
+    padding: 12px 0;
   }
   
   .header-title {
-    font-size: 32px;
+    font-size: 28px;
   }
   
   .my-info {
-    padding: 20px 28px;
+    padding: 16px 24px;
   }
   
   .my-info-emoji {
-    font-size: 52px;
-    width: 80px;
-    height: 80px;
+    font-size: 44px;
+    width: 68px;
+    height: 68px;
   }
   
   .my-info-name {
-    font-size: 22px;
+    font-size: 20px;
   }
   
   .mode-selector {
-    margin: 20px 0;
+    margin: 16px 0;
   }
   
   .mode-current {
-    padding: 14px 24px;
-    font-size: 16px;
+    padding: 12px 20px;
+    font-size: 15px;
   }
   
   .peers-grid { 
     grid-template-columns: repeat(3, 1fr); 
-    gap: 24px;
-    padding: 10px;
+    gap: 20px;
+    padding: 8px;
   }
   
   .peer-card {
-    padding: 28px 16px;
+    padding: 24px 14px;
   }
   
   .peer-emoji {
-    font-size: 52px;
+    font-size: 48px;
   }
   
   .peer-name {
-    font-size: 16px;
+    font-size: 15px;
   }
   
-  /* Empty state for tablet */
+  /* Empty state for tablet - เล็กลงและดันขึ้น */
   .empty-state {
-    padding: 60px 40px;
+    padding: 20px 30px 30px !important;
+    margin-top: -10px !important;
   }
   
   .empty-critter-container {
-    width: 200px;
-    height: 200px;
-    margin-bottom: 24px;
+    width: 140px !important;
+    height: 140px !important;
+    margin-bottom: 16px !important;
   }
   
   .empty-critter {
-    font-size: 90px;
+    font-size: 65px !important;
   }
   
   .empty-cloud {
-    width: 180px;
-    height: 60px;
+    width: 130px !important;
+    height: 45px !important;
   }
   
-  .empty-title {
-    font-size: 26px;
-    margin-bottom: 12px;
+  .empty-message {
+    font-size: 22px !important;
+    margin-bottom: 8px !important;
   }
   
   .empty-hint {
-    font-size: 16px;
-    margin-bottom: 24px;
+    font-size: 14px !important;
+    margin-bottom: 20px !important;
   }
   
   .empty-actions {
-    gap: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
   }
   
   .empty-actions .btn {
-    padding: 14px 28px;
-    font-size: 16px;
+    padding: 12px 20px !important;
+    font-size: 14px !important;
   }
   
   .empty-footer-mobile {
-    margin-top: 32px;
+    margin-top: 20px;
   }
   
   .empty-footer-mobile .feedback-btn {
-    padding: 12px 24px;
-    font-size: 15px;
+    display: none;
   }
 }
 
 /* Large Tablet / Small Desktop */
-@media (min-width: 769px) and (max-width: 1024px) {
+@media screen and (min-width: 900px) and (max-width: 1366px) {
   .app { 
-    max-width: 800px; 
+    max-width: 850px !important; 
   }
   
   .peers-grid { 
@@ -2139,7 +2209,7 @@ body {
 }
 
 /* Desktop */
-@media (min-width: 1025px) {
+@media (min-width: 1367px) {
   .app { max-width: 900px; }
   .peers-grid { grid-template-columns: repeat(4, 1fr); }
 }
