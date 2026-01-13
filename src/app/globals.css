@@ -2022,15 +2022,125 @@ body {
   .empty-footer-mobile .feedback-btn { padding: 6px 14px; font-size: 11px; }
 }
 
-/* Tablet */
+/* Tablet (iPad) */
 @media (min-width: 481px) and (max-width: 1024px) {
-  .app { max-width: 600px; }
-  .peers-grid { grid-template-columns: repeat(3, 1fr); }
+  .app { 
+    max-width: 700px; 
+    padding: 20px 30px;
+  }
+  
+  .header {
+    padding: 16px 0;
+  }
+  
+  .header-title {
+    font-size: 32px;
+  }
+  
+  .my-info {
+    padding: 20px 28px;
+  }
+  
+  .my-info-emoji {
+    font-size: 52px;
+    width: 80px;
+    height: 80px;
+  }
+  
+  .my-info-name {
+    font-size: 22px;
+  }
+  
+  .mode-selector {
+    margin: 20px 0;
+  }
+  
+  .mode-current {
+    padding: 14px 24px;
+    font-size: 16px;
+  }
+  
+  .peers-grid { 
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 24px;
+    padding: 10px;
+  }
+  
+  .peer-card {
+    padding: 28px 16px;
+  }
+  
+  .peer-emoji {
+    font-size: 52px;
+  }
+  
+  .peer-name {
+    font-size: 16px;
+  }
+  
+  /* Empty state for tablet */
+  .empty-state {
+    padding: 60px 40px;
+  }
+  
+  .empty-critter-container {
+    width: 200px;
+    height: 200px;
+    margin-bottom: 24px;
+  }
+  
+  .empty-critter {
+    font-size: 90px;
+  }
+  
+  .empty-cloud {
+    width: 180px;
+    height: 60px;
+  }
+  
+  .empty-title {
+    font-size: 26px;
+    margin-bottom: 12px;
+  }
+  
+  .empty-hint {
+    font-size: 16px;
+    margin-bottom: 24px;
+  }
+  
+  .empty-actions {
+    gap: 16px;
+  }
+  
+  .empty-actions .btn {
+    padding: 14px 28px;
+    font-size: 16px;
+  }
+  
+  .empty-footer-mobile {
+    margin-top: 32px;
+  }
+  
+  .empty-footer-mobile .feedback-btn {
+    padding: 12px 24px;
+    font-size: 15px;
+  }
+}
+
+/* Large Tablet / Small Desktop */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .app { 
+    max-width: 800px; 
+  }
+  
+  .peers-grid { 
+    grid-template-columns: repeat(4, 1fr); 
+  }
 }
 
 /* Desktop */
 @media (min-width: 1025px) {
-  .app { max-width: 700px; }
+  .app { max-width: 900px; }
   .peers-grid { grid-template-columns: repeat(4, 1fr); }
 }
 
