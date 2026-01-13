@@ -36,6 +36,8 @@ export default function Home() {
     peers,
     discoveryMode,
     roomCode,
+    roomPassword,
+    roomError,
     fileOffer,
     transfer,
     transferResult,
@@ -420,8 +422,15 @@ export default function Home() {
         <ModeSelector
           mode={discoveryMode}
           roomCode={roomCode}
+          roomPassword={roomPassword}
           onChangeMode={setMode}
         />
+
+        {roomError && (
+          <div className="room-error">
+            <span>❌ {roomError}</span>
+          </div>
+        )}
 
         {peers.length === 0 ? (
           <EmptyState

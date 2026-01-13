@@ -29,20 +29,21 @@ interface Peer extends PeerData {
   publicIP: string;
   mode: DiscoveryMode;
   roomCode: string | null;
+  roomPassword: string | null;
 }
 
 // All connected peers
 const peers = new Map<string, Peer>();
 
-// Room code -> Set of peer IDs
-const rooms = new Map<string, Set<string>>();
+// Room code -> { peerIds, password }
+const rooms = new Map<string, { peerIds: Set<string>; password: string | null }>();
 
 // Generate 5-digit room code
 function generateRoomCode(): string {
   let code: string;
   do {
     code = Math.floor(10000 + Math.random() * 90000).toString();
-  } while (rooms.has(code) && rooms.get(code)!.size > 0);
+  } while (rooms.has(code) && rooms.get(code)!.peerIds.size > 0);
   return code;
 }
 
@@ -186,6 +187,7 @@ app.prepare().then(() => {
           emitToPeer(io, existingPeer, 'mode-info', { 
             mode: existingPeer.mode,
             roomCode: existingPeer.roomCode,
+            roomPassword: existingPeer.roomPassword,
           });
         } else {
           // New user - default to public mode
@@ -195,6 +197,7 @@ app.prepare().then(() => {
             publicIP: clientIP,
             mode: 'public',
             roomCode: null,
+            roomPassword: null,
           };
           peers.set(peerData.id, peer);
           
@@ -204,6 +207,7 @@ app.prepare().then(() => {
           emitToPeer(io, peer, 'mode-info', { 
             mode: 'public',
             roomCode: null,
+            roomPassword: null,
           });
         }
         
@@ -214,7 +218,7 @@ app.prepare().then(() => {
     });
 
     // Change discovery mode
-    socket.on('set-mode', ({ mode, roomCode }: { mode: DiscoveryMode; roomCode?: string }) => {
+    socket.on('set-mode', ({ mode, roomCode, password }: { mode: DiscoveryMode; roomCode?: string; password?: string }) => {
       try {
         const peer = getPeerBySocketId(socket.id);
         if (!peer) return;
@@ -230,8 +234,8 @@ app.prepare().then(() => {
         
         // Leave old room if was in private mode
         if (oldMode === 'private' && oldRoom && rooms.has(oldRoom)) {
-          rooms.get(oldRoom)!.delete(peer.id);
-          if (rooms.get(oldRoom)!.size === 0) {
+          rooms.get(oldRoom)!.peerIds.delete(peer.id);
+          if (rooms.get(oldRoom)!.peerIds.size === 0) {
             rooms.delete(oldRoom);
           }
         }
@@ -240,18 +244,64 @@ app.prepare().then(() => {
         peer.mode = mode;
         
         if (mode === 'private') {
-          // Validate room code if provided
-          const code = (roomCode && /^\d{5}$/.test(roomCode)) ? roomCode : generateRoomCode();
-          peer.roomCode = code;
-          
-          if (!rooms.has(code)) {
-            rooms.set(code, new Set());
+          // Joining existing room
+          if (roomCode && /^\d{5}$/.test(roomCode)) {
+            const existingRoom = rooms.get(roomCode);
+            
+            // Check password if room exists and has password
+            if (existingRoom && existingRoom.password) {
+              if (password !== existingRoom.password) {
+                // Wrong password
+                console.log(`${peer.name} failed to join room ${roomCode} - wrong password`);
+                emitToPeer(io, peer, 'room-error', { 
+                  error: 'wrong-password',
+                  message: 'รหัสผ่านไม่ถูกต้อง'
+                });
+                // Revert to public mode
+                peer.mode = 'public';
+                peer.roomCode = null;
+                peer.roomPassword = null;
+                emitToPeer(io, peer, 'mode-info', { 
+                  mode: 'public',
+                  roomCode: null,
+                  roomPassword: null,
+                });
+                broadcastPeers(io);
+                return;
+              }
+            }
+            
+            peer.roomCode = roomCode;
+            peer.roomPassword = existingRoom?.password || null;
+            
+            if (!existingRoom) {
+              // Create room with password if provided
+              rooms.set(roomCode, { 
+                peerIds: new Set([peer.id]), 
+                password: password || null 
+              });
+              peer.roomPassword = password || null;
+            } else {
+              existingRoom.peerIds.add(peer.id);
+            }
+            
+            console.log(`${peer.name} joined room ${roomCode}${peer.roomPassword ? ' (password protected)' : ''}`);
+          } else {
+            // Create new room
+            const code = generateRoomCode();
+            peer.roomCode = code;
+            peer.roomPassword = password || null;
+            
+            rooms.set(code, { 
+              peerIds: new Set([peer.id]), 
+              password: password || null 
+            });
+            
+            console.log(`${peer.name} created room ${code}${password ? ' (password protected)' : ''}`);
           }
-          rooms.get(code)!.add(peer.id);
-          
-          console.log(`${peer.name} switched to private mode, room: ${code}`);
         } else {
           peer.roomCode = null;
+          peer.roomPassword = null;
           console.log(`${peer.name} switched to ${mode} mode`);
         }
         
@@ -259,6 +309,7 @@ app.prepare().then(() => {
         emitToPeer(io, peer, 'mode-info', { 
           mode: peer.mode,
           roomCode: peer.roomCode,
+          roomPassword: peer.roomPassword,
         });
         
         broadcastPeers(io);
@@ -398,8 +449,8 @@ app.prepare().then(() => {
           if (peer.sockets.size === 0) {
             // Remove from room if in private mode
             if (peer.mode === 'private' && peer.roomCode && rooms.has(peer.roomCode)) {
-              rooms.get(peer.roomCode)!.delete(peer.id);
-              if (rooms.get(peer.roomCode)!.size === 0) {
+              rooms.get(peer.roomCode)!.peerIds.delete(peer.id);
+              if (rooms.get(peer.roomCode)!.peerIds.size === 0) {
                 rooms.delete(peer.roomCode);
               }
             }

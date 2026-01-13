@@ -2819,6 +2819,7 @@ body {
 
 .mode-join-input {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   padding: 12px;
   border-top: 1px solid var(--border-color);
@@ -2826,22 +2827,37 @@ body {
 }
 
 .mode-join-input input {
-  flex: 1;
+  width: 100%;
   padding: 10px 14px;
   border: 2px solid var(--border-color);
   border-radius: 50px;
   font-family: var(--font-display);
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: 4px;
+  letter-spacing: 2px;
   text-align: center;
   background: var(--bg-card);
   color: var(--text-primary);
   outline: none;
 }
 
+.mode-join-input input[type="password"] {
+  letter-spacing: 4px;
+}
+
+.mode-join-input input::placeholder {
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
 .mode-join-input input:focus {
   border-color: var(--accent-pink);
+}
+
+.mode-join-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
 }
 
 .mode-join-btn {
@@ -2860,12 +2876,108 @@ body {
 }
 
 .mode-cancel-btn {
-  padding: 10px;
+  padding: 10px 16px;
   background: var(--bg-cream);
   border: none;
   border-radius: 50px;
   cursor: pointer;
   color: var(--text-muted);
+}
+
+/* Create room with password */
+.mode-create-room {
+  padding: 12px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 8px;
+}
+
+.mode-create-header {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.mode-password-input {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mode-password-input input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 2px solid var(--border-color);
+  border-radius: 50px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.mode-password-input input:focus {
+  border-color: var(--accent-pink);
+}
+
+.mode-show-pwd,
+.mode-show-pwd-small {
+  background: var(--bg-cream);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 50px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.mode-show-pwd-small {
+  padding: 4px 8px;
+  font-size: 14px;
+}
+
+.mode-create-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.mode-create-btn {
+  padding: 10px 20px;
+  background: var(--accent-mint);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mode-lock {
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.mode-password {
+  font-family: monospace;
+}
+
+/* Room error */
+.room-error {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 50px;
+  text-align: center;
+  margin: 10px auto;
+  max-width: 300px;
+  font-size: 14px;
+  font-weight: 500;
+  animation: shake 0.5s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
 }
 
 .mode-join-room {
@@ -2904,6 +3016,15 @@ body {
 
 [data-theme="dark"] .mode-join-input input {
   background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .mode-password-input input {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .mode-show-pwd,
+[data-theme="dark"] .mode-show-pwd-small {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 

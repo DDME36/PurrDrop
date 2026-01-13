@@ -54,6 +54,8 @@ export function usePeerConnection() {
   const [peers, setPeers] = useState<PeerWithMeta[]>([]);
   const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode>('public');
   const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [roomPassword, setRoomPassword] = useState<string | null>(null);
+  const [roomError, setRoomError] = useState<string | null>(null);
   const [fileOffer, setFileOffer] = useState<FileOffer | null>(null);
   const [transfer, setTransfer] = useState<TransferProgress | null>(null);
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
@@ -502,10 +504,19 @@ export function usePeerConnection() {
       setRoomCode(code);
     });
 
-    socket.on('mode-info', ({ mode, roomCode: code }: { mode: DiscoveryMode; roomCode: string | null }) => {
-      console.log('🔄 Mode:', mode, 'Room:', code);
+    socket.on('mode-info', ({ mode, roomCode: code, roomPassword: pwd }: { mode: DiscoveryMode; roomCode: string | null; roomPassword: string | null }) => {
+      console.log('🔄 Mode:', mode, 'Room:', code, 'Password:', pwd ? '***' : 'none');
       setDiscoveryMode(mode);
       setRoomCode(code);
+      setRoomPassword(pwd);
+      setRoomError(null);
+    });
+
+    socket.on('room-error', ({ error, message }: { error: string; message: string }) => {
+      console.log('❌ Room error:', error, message);
+      setRoomError(message);
+      // Clear error after 5 seconds
+      setTimeout(() => setRoomError(null), 5000);
     });
 
     socket.on('peer-joined', (newPeer: PeerWithMeta) => {
@@ -671,10 +682,10 @@ export function usePeerConnection() {
     socketRef.current.emit('set-mode', { mode: 'private' });
   }, []);
 
-  const setMode = useCallback((mode: DiscoveryMode, code?: string) => {
+  const setMode = useCallback((mode: DiscoveryMode, code?: string, password?: string) => {
     if (!socketRef.current) return;
-    console.log('🔄 Setting mode:', mode, code);
-    socketRef.current.emit('set-mode', { mode, roomCode: code });
+    console.log('🔄 Setting mode:', mode, code, password ? '(with password)' : '');
+    socketRef.current.emit('set-mode', { mode, roomCode: code, password });
   }, []);
 
   return {
@@ -684,6 +695,8 @@ export function usePeerConnection() {
     peers,
     discoveryMode,
     roomCode,
+    roomPassword,
+    roomError,
     fileOffer,
     transfer,
     transferResult,
