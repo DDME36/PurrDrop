@@ -456,11 +456,14 @@ export function usePeerConnection() {
     }
 
     const customName = localStorage.getItem('critters_custom_name') || generateCuteName();
-    const customEmoji = localStorage.getItem('critters_custom_emoji') || '';
+    const customEmoji = localStorage.getItem('critters_custom_emoji');
     const critter = assignCritter(navigator.userAgent);
     const device = getDeviceName(navigator.userAgent);
 
-    if (customEmoji) critter.emoji = customEmoji;
+    // ใช้ emoji ที่ user เลือกไว้ (ถ้ามี)
+    if (customEmoji) {
+      critter.emoji = customEmoji;
+    }
 
     const peer: Peer = {
       id: sessionId,
@@ -537,8 +540,11 @@ export function usePeerConnection() {
 
     socket.on('peer-joined', (newPeer: PeerWithMeta) => {
       setPeers(prev => {
-        const filtered = prev.filter(p => p.id !== newPeer.id);
-        return [...filtered, newPeer];
+        // ถ้ามี peer นี้อยู่แล้ว ไม่ต้อง add ซ้ำ (ป้องกัน double animation)
+        if (prev.some(p => p.id === newPeer.id)) {
+          return prev;
+        }
+        return [...prev, newPeer];
       });
     });
 

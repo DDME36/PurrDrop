@@ -303,7 +303,11 @@ app.prepare().then(() => {
           sendFullPeerList(io, peer);
           
           // Notify others about new peer (delta update)
-          notifyPeerJoined(io, peer);
+          // ใช้ setTimeout เพื่อให้ client ได้รับ peers list ก่อน แล้วค่อยส่ง peer-joined
+          // ป้องกัน double animation
+          setTimeout(() => {
+            notifyPeerJoined(io, peer);
+          }, 100);
         }
       } catch (err) {
         console.error('Error in join handler:', err);
