@@ -514,7 +514,11 @@ export function usePeerConnection() {
     });
 
     socket.on('peers', (peerList: PeerWithMeta[]) => {
-      setPeers(peerList.filter(p => p.id !== sessionId));
+      const filtered = peerList.filter(p => p.id !== sessionId);
+      // เก็บ IDs ไว้ใน ref ด้วย เพื่อให้ peer-joined เช็คได้
+      const ids = new Set(filtered.map(p => p.id));
+      peersRef.current = filtered;
+      setPeers(filtered);
     });
 
     socket.on('room-info', ({ roomCode: code }: { roomCode: string }) => {
@@ -539,8 +543,11 @@ export function usePeerConnection() {
     });
 
     socket.on('peer-joined', (newPeer: PeerWithMeta) => {
+      // ใช้ ref เช็คแทน state เพื่อความแม่นยำ
+      if (peersRef.current.some(p => p.id === newPeer.id)) {
+        return; // มีอยู่แล้ว ไม่ต้อง add
+      }
       setPeers(prev => {
-        // ถ้ามี peer นี้อยู่แล้ว ไม่ต้อง add ซ้ำ (ป้องกัน double animation)
         if (prev.some(p => p.id === newPeer.id)) {
           return prev;
         }

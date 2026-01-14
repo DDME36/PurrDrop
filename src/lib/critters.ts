@@ -44,8 +44,9 @@ export function generateCuteName(): string {
 
 export function detectOS(userAgent: string): OSType {
   const ua = userAgent.toLowerCase();
-  if (ua.includes('ipad')) return 'ipados';
+  // ต้องเช็ค iPhone ก่อน iPad เพราะบาง UA อาจมีทั้งสองคำ
   if (ua.includes('iphone')) return 'ios';
+  if (ua.includes('ipad')) return 'ipados';
   if (ua.includes('macintosh') || ua.includes('mac os')) return 'macos';
   if (ua.includes('windows')) return 'windows';
   if (ua.includes('android')) return 'android';

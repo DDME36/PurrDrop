@@ -49,6 +49,21 @@ function generateRoomCode(): string {
   return code;
 }
 
+// Get local IP address of server
+function getLocalIP(): string {
+  const { networkInterfaces } = require('os');
+  const nets = networkInterfaces();
+  
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
 // Get client's real IP - รองรับ Cloud Provider หลายเจ้า
 function getClientIP(socket: Socket): string {
   const headers = socket.handshake.headers;
@@ -74,9 +89,10 @@ function getClientIP(socket: Socket): string {
     ip = socket.handshake.address || 'unknown';
   }
   
-  // Normalize localhost variants
+  // Normalize localhost variants - ใช้ IP จริงของ server แทน
   if (ip === '::1' || ip === '::ffff:127.0.0.1' || ip === '127.0.0.1') {
-    return 'localhost';
+    // ใช้ IP จริงของ server เพื่อให้ match กับอุปกรณ์อื่นใน WiFi เดียวกัน
+    return getLocalIP();
   }
   
   // Remove IPv6 prefix if present (::ffff:)
@@ -89,7 +105,7 @@ function getClientIP(socket: Socket): string {
 
 // สร้างชื่อ Network จาก IP (ให้ user เห็นว่าอยู่วงไหน)
 function getNetworkName(ip: string): string {
-  if (ip === 'localhost' || ip === 'unknown') {
+  if (ip === '127.0.0.1' || ip === 'unknown') {
     return 'Local Network';
   }
   
@@ -592,17 +608,3 @@ app.prepare().then(() => {
     `);
   });
 });
-
-function getLocalIP(): string {
-  const { networkInterfaces } = require('os');
-  const nets = networkInterfaces();
-  
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  return 'localhost';
-}

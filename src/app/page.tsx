@@ -463,14 +463,9 @@ export default function Home() {
           roomCode={roomCode}
           roomPassword={roomPassword}
           networkName={networkName}
+          roomError={roomError}
           onChangeMode={setMode}
         />
-
-        {roomError && (
-          <div className="room-error">
-            <span>❌ {roomError}</span>
-          </div>
-        )}
 
         {peers.length === 0 ? (
           <EmptyState
