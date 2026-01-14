@@ -72,6 +72,7 @@ export default function Home() {
   const confettiRef = useRef<ConfettiRef>(null);
   const toastRef = useRef<ToastRef>(null);
   const prevPeerIdsRef = useRef<Set<string>>(new Set());
+  const isFirstLoadRef = useRef(true);
 
   // Load history on mount
   useEffect(() => {
@@ -121,6 +122,16 @@ export default function Home() {
   useEffect(() => {
     const currentIds = new Set(peers.map(p => p.id));
     const newIds = new Set<string>();
+
+    // ถ้าเป็นครั้งแรก ให้ข้าม animation .entering ไปเลย
+    // เพื่อป้องกัน double flash (cardAppear + cardEnter ตีกัน)
+    if (isFirstLoadRef.current) {
+      if (currentIds.size > 0) {
+        prevPeerIdsRef.current = currentIds;
+        isFirstLoadRef.current = false;
+      }
+      return;
+    }
     
     currentIds.forEach(id => {
       if (!prevPeerIdsRef.current.has(id)) {

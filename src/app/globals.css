@@ -984,7 +984,7 @@ body {
     0 10px 20px rgba(255, 179, 209, 0.15);
   position: relative;
   overflow: visible;
-  animation: cardAppear 0.5s ease backwards;
+  animation: cardAppear 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 [data-theme="dark"] .peer-card {
@@ -1020,7 +1020,7 @@ body {
 }
 
 .peer-card.entering {
-  animation: cardEnter 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: cardEnter 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 @keyframes cardEnter {
