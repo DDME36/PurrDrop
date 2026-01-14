@@ -344,12 +344,33 @@ app.prepare().then(() => {
         peer.mode = mode;
         
         if (mode === 'private') {
-          // Joining existing room
+          // Joining existing room with code
           if (roomCode && /^\d{5}$/.test(roomCode)) {
             const existingRoom = rooms.get(roomCode);
             
-            // Check password if room exists and has password
-            if (existingRoom && existingRoom.password) {
+            // ถ้าไม่มีห้องนี้ → แจ้ง error
+            if (!existingRoom) {
+              console.log(`${peer.name} tried to join non-existent room ${roomCode}`);
+              emitToPeer(io, peer, 'room-error', { 
+                error: 'room-not-found',
+                message: 'ไม่พบห้องนี้'
+              });
+              // Revert to public mode
+              peer.mode = 'public';
+              peer.roomCode = null;
+              peer.roomPassword = null;
+              emitToPeer(io, peer, 'mode-info', { 
+                mode: 'public',
+                roomCode: null,
+                roomPassword: null,
+                networkName: peer.networkName,
+              });
+              broadcastPeers(io);
+              return;
+            }
+            
+            // Check password if room has password
+            if (existingRoom.password) {
               if (password !== existingRoom.password) {
                 // Wrong password
                 console.log(`${peer.name} failed to join room ${roomCode} - wrong password`);
@@ -372,23 +393,14 @@ app.prepare().then(() => {
               }
             }
             
+            // Join existing room
             peer.roomCode = roomCode;
-            peer.roomPassword = existingRoom?.password || null;
-            
-            if (!existingRoom) {
-              // Create room with password if provided
-              rooms.set(roomCode, { 
-                peerIds: new Set([peer.id]), 
-                password: password || null 
-              });
-              peer.roomPassword = password || null;
-            } else {
-              existingRoom.peerIds.add(peer.id);
-            }
+            peer.roomPassword = existingRoom.password || null;
+            existingRoom.peerIds.add(peer.id);
             
             console.log(`${peer.name} joined room ${roomCode}${peer.roomPassword ? ' (password protected)' : ''}`);
           } else {
-            // Create new room
+            // Create new room (no code provided = generate new)
             const code = generateRoomCode();
             peer.roomCode = code;
             peer.roomPassword = password || null;
