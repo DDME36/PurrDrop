@@ -1,11 +1,14 @@
 // StreamSaver - รับไฟล์ใหญ่แบบ Streaming (ไม่กิน RAM)
-// ใช้ File System Access API (Chrome/Edge) หรือ Service Worker fallback
+// ใช้ File System Access API (Chrome/Edge) หรือ Memory fallback
 
 export interface StreamWriter {
   write(chunk: ArrayBuffer): Promise<void>;
   close(): Promise<void>;
   abort(): void;
 }
+
+// Memory limit for fallback writer (500MB)
+const MEMORY_WRITER_LIMIT = 500 * 1024 * 1024;
 
 // Check if File System Access API is supported
 export function supportsFileSystemAccess(): boolean {
@@ -53,7 +56,16 @@ export async function createFileSystemWriter(
   }
 }
 
+// Error class for file too large
+export class FileTooLargeError extends Error {
+  constructor(fileSize: number, limit: number) {
+    super(`ไฟล์ใหญ่เกินไป (${(fileSize / 1024 / 1024).toFixed(0)}MB) - Browser นี้รองรับสูงสุด ${(limit / 1024 / 1024).toFixed(0)}MB`);
+    this.name = 'FileTooLargeError';
+  }
+}
+
 // Fallback: collect chunks in memory then download (for Safari/Firefox)
+// WARNING: Has memory limit - will throw FileTooLargeError if exceeded
 export function createMemoryWriter(
   filename: string,
   mimeType: string,
@@ -64,14 +76,27 @@ export function createMemoryWriter(
   let received = 0;
   let aborted = false;
 
-  // Warn if file is very large
-  if (expectedSize > 500 * 1024 * 1024) {
-    console.warn(`⚠️ Large file (${(expectedSize / 1024 / 1024).toFixed(0)}MB) - may use significant memory`);
+  // Hard limit check - reject files too large for memory
+  if (expectedSize > MEMORY_WRITER_LIMIT) {
+    throw new FileTooLargeError(expectedSize, MEMORY_WRITER_LIMIT);
+  }
+
+  // Warn if file is getting large
+  if (expectedSize > 200 * 1024 * 1024) {
+    console.warn(`⚠️ Large file (${(expectedSize / 1024 / 1024).toFixed(0)}MB) - using memory buffer`);
   }
 
   return {
     async write(chunk: ArrayBuffer) {
       if (aborted) return;
+      
+      // Runtime check in case expectedSize was wrong
+      if (received + chunk.byteLength > MEMORY_WRITER_LIMIT) {
+        aborted = true;
+        chunks.length = 0;
+        throw new FileTooLargeError(received + chunk.byteLength, MEMORY_WRITER_LIMIT);
+      }
+      
       chunks.push(chunk);
       received += chunk.byteLength;
       onProgress?.(received);
@@ -90,8 +115,8 @@ export function createMemoryWriter(
       a.click();
       document.body.removeChild(a);
       
-      // Cleanup
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      // Cleanup immediately after click initiated
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       chunks.length = 0; // Free memory
     },
     abort() {
@@ -108,16 +133,23 @@ export async function createStreamWriter(
   expectedSize: number,
   onProgress?: (received: number) => void
 ): Promise<StreamWriter> {
-  // For large files on supported browsers, use File System Access
-  if (expectedSize > 100 * 1024 * 1024 && supportsFileSystemAccess()) {
-    const fsWriter = await createFileSystemWriter(filename, mimeType);
-    if (fsWriter) {
-      console.log('📁 Using File System Access API for large file');
-      return fsWriter;
+  // For large files, try File System Access first (required for files > 500MB)
+  if (expectedSize > 100 * 1024 * 1024) {
+    if (supportsFileSystemAccess()) {
+      const fsWriter = await createFileSystemWriter(filename, mimeType);
+      if (fsWriter) {
+        console.log('📁 Using File System Access API for large file');
+        return fsWriter;
+      }
+    }
+    
+    // If File System Access not available and file > limit, throw error
+    if (expectedSize > MEMORY_WRITER_LIMIT) {
+      throw new FileTooLargeError(expectedSize, MEMORY_WRITER_LIMIT);
     }
   }
 
-  // Fallback to memory
+  // Fallback to memory (with limit protection)
   console.log('💾 Using memory buffer for file download');
   return createMemoryWriter(filename, mimeType, expectedSize, onProgress);
 }
@@ -126,4 +158,12 @@ export async function createStreamWriter(
 export function shouldUseStreaming(fileSize: number): boolean {
   // Use streaming for files > 50MB
   return fileSize > 50 * 1024 * 1024;
+}
+
+// Get max receivable file size for current browser
+export function getMaxReceivableSize(): number {
+  if (supportsFileSystemAccess()) {
+    return Infinity; // No limit with File System Access
+  }
+  return MEMORY_WRITER_LIMIT;
 }

@@ -1,9 +1,32 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+
+// Singleton AudioContext - shared across all hook instances
+let sharedAudioContext: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  
+  if (!sharedAudioContext) {
+    const AudioContextClass = window.AudioContext || 
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (AudioContextClass) {
+      sharedAudioContext = new AudioContextClass();
+    }
+  }
+  
+  return sharedAudioContext;
+}
 
 export function useSound() {
   const [muted, setMuted] = useState(false);
+  const mutedRef = useRef(muted);
+
+  // Keep ref in sync for use in callbacks
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
 
   useEffect(() => {
     const saved = localStorage.getItem('critters_muted');
@@ -19,9 +42,18 @@ export function useSound() {
   }, []);
 
   const play = useCallback((type: 'connect' | 'whoosh' | 'success' | 'notification') => {
-    if (muted) return;
+    // Use ref to avoid stale closure
+    if (mutedRef.current) return;
+    
     try {
-      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      
+      // Resume if suspended (required after user interaction in modern browsers)
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -57,7 +89,7 @@ export function useSound() {
     } catch {
       // Audio not supported
     }
-  }, [muted]);
+  }, []);
 
   const vibrate = useCallback((pattern: number | number[] = 10) => {
     if ('vibrate' in navigator) {

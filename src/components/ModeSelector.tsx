@@ -8,6 +8,7 @@ interface ModeSelectorProps {
   mode: DiscoveryMode;
   roomCode: string | null;
   roomPassword: string | null;
+  networkName: string | null;
   onChangeMode: (mode: DiscoveryMode, roomCode?: string, password?: string) => void;
 }
 
@@ -17,7 +18,7 @@ const modeConfig = {
   private: { icon: '🔐', label: 'ส่วนตัว', desc: 'เฉพาะรหัสห้อง' },
 };
 
-export function ModeSelector({ mode, roomCode, roomPassword, onChangeMode }: ModeSelectorProps) {
+export function ModeSelector({ mode, roomCode, roomPassword, networkName, onChangeMode }: ModeSelectorProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showJoinInput, setShowJoinInput] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
@@ -88,6 +89,9 @@ export function ModeSelector({ mode, roomCode, roomPassword, onChangeMode }: Mod
       >
         <span className="mode-icon">{currentMode.icon}</span>
         <span className="mode-label">{currentMode.label}</span>
+        {mode === 'wifi' && networkName && (
+          <span className="mode-network-name">{networkName}</span>
+        )}
         {mode === 'private' && roomCode && (
           <>
             <span className="mode-room-code">{roomCode}</span>

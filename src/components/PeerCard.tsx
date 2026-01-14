@@ -10,44 +10,64 @@ interface PeerCardProps {
   onDrop: (peer: Peer, files: File[]) => void;
 }
 
-// Recursively get all files from a directory entry
-async function getFilesFromEntry(entry: FileSystemEntry): Promise<File[]> {
+// Max files allowed in single drop
+const MAX_FILES = 500;
+const MAX_TOTAL_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+
+// Recursively get all files from a directory entry (with limits)
+async function getFilesFromEntry(
+  entry: FileSystemEntry, 
+  files: File[], 
+  totalSize: { value: number }
+): Promise<void> {
+  // Check limits
+  if (files.length >= MAX_FILES || totalSize.value >= MAX_TOTAL_SIZE) {
+    return;
+  }
+
   if (entry.isFile) {
     return new Promise((resolve) => {
       (entry as FileSystemFileEntry).file((file) => {
-        resolve([file]);
-      }, () => resolve([]));
+        if (files.length < MAX_FILES && totalSize.value + file.size <= MAX_TOTAL_SIZE) {
+          files.push(file);
+          totalSize.value += file.size;
+        }
+        resolve();
+      }, () => resolve());
     });
   } else if (entry.isDirectory) {
     const dirReader = (entry as FileSystemDirectoryEntry).createReader();
-    const files: File[] = [];
     
-    const readEntries = (): Promise<File[]> => {
+    const readBatch = (): Promise<void> => {
       return new Promise((resolve) => {
         dirReader.readEntries(async (entries) => {
-          if (entries.length === 0) {
-            resolve(files);
-          } else {
-            for (const e of entries) {
-              const subFiles = await getFilesFromEntry(e);
-              files.push(...subFiles);
-            }
-            // Continue reading (directories may have batched results)
-            const moreFiles = await readEntries();
-            resolve(moreFiles);
+          if (entries.length === 0 || files.length >= MAX_FILES) {
+            resolve();
+            return;
           }
-        }, () => resolve(files));
+          
+          for (const e of entries) {
+            if (files.length >= MAX_FILES || totalSize.value >= MAX_TOTAL_SIZE) break;
+            await getFilesFromEntry(e, files, totalSize);
+          }
+          
+          // Continue reading (directories may have batched results)
+          if (files.length < MAX_FILES) {
+            await readBatch();
+          }
+          resolve();
+        }, () => resolve());
       });
     };
     
-    return readEntries();
+    await readBatch();
   }
-  return [];
 }
 
-// Get all files from DataTransfer (supports folders)
-async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<File[]> {
+// Get all files from DataTransfer (supports folders, with limits)
+async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<{ files: File[]; limited: boolean }> {
   const files: File[] = [];
+  const totalSize = { value: 0 };
   const items = dataTransfer.items;
   
   // Try to use webkitGetAsEntry for folder support
@@ -61,14 +81,16 @@ async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<Fil
   
   if (entries.length > 0) {
     for (const entry of entries) {
-      const entryFiles = await getFilesFromEntry(entry);
-      files.push(...entryFiles);
+      if (files.length >= MAX_FILES || totalSize.value >= MAX_TOTAL_SIZE) break;
+      await getFilesFromEntry(entry, files, totalSize);
     }
-    return files;
+    const limited = files.length >= MAX_FILES || totalSize.value >= MAX_TOTAL_SIZE;
+    return { files, limited };
   }
   
   // Fallback to regular files
-  return Array.from(dataTransfer.files);
+  const regularFiles = Array.from(dataTransfer.files).slice(0, MAX_FILES);
+  return { files: regularFiles, limited: dataTransfer.files.length > MAX_FILES };
 }
 
 export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
@@ -93,8 +115,11 @@ export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
     e.stopPropagation();
     cardRef.current?.classList.remove('drag-over');
     
-    const files = await getFilesFromDataTransfer(e.dataTransfer);
+    const { files, limited } = await getFilesFromDataTransfer(e.dataTransfer);
     if (files.length > 0) {
+      if (limited) {
+        console.warn(`⚠️ File limit reached: only sending first ${files.length} files`);
+      }
       onDrop(peer, files);
     }
   };

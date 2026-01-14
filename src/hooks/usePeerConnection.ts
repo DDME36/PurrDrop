@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { v4 as uuidv4 } from 'uuid';
 import { Peer, assignCritter, getDeviceName, generateCuteName } from '@/lib/critters';
-import { createStreamWriter, shouldUseStreaming, StreamWriter } from '@/lib/streamSaver';
+import { createStreamWriter, shouldUseStreaming, StreamWriter, FileTooLargeError } from '@/lib/streamSaver';
 
 interface FileOffer {
   from: Peer;
@@ -55,6 +55,7 @@ export function usePeerConnection() {
   const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode>('public');
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [roomPassword, setRoomPassword] = useState<string | null>(null);
+  const [networkName, setNetworkName] = useState<string | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
   const [fileOffer, setFileOffer] = useState<FileOffer | null>(null);
   const [transfer, setTransfer] = useState<TransferProgress | null>(null);
@@ -168,6 +169,20 @@ export function usePeerConnection() {
               try {
                 streamWriter = await createStreamWriter(msg.name, msg.mimeType, msg.size);
               } catch (err) {
+                if (err instanceof FileTooLargeError) {
+                  console.error('❌ File too large for this browser:', err.message);
+                  // Notify user and abort
+                  setTransfer({
+                    peerId,
+                    peerName: senderPeer?.name || 'ไม่ทราบชื่อ',
+                    fileName: msg.name,
+                    fileSize: msg.size,
+                    progress: 0,
+                    status: 'error',
+                  });
+                  setTimeout(() => setTransfer(null), 5000);
+                  return;
+                }
                 console.log('Streaming not available, using memory buffer:', err);
               }
             }
@@ -504,11 +519,12 @@ export function usePeerConnection() {
       setRoomCode(code);
     });
 
-    socket.on('mode-info', ({ mode, roomCode: code, roomPassword: pwd }: { mode: DiscoveryMode; roomCode: string | null; roomPassword: string | null }) => {
-      console.log('🔄 Mode:', mode, 'Room:', code, 'Password:', pwd ? '***' : 'none');
+    socket.on('mode-info', ({ mode, roomCode: code, roomPassword: pwd, networkName: netName }: { mode: DiscoveryMode; roomCode: string | null; roomPassword: string | null; networkName?: string }) => {
+      console.log('🔄 Mode:', mode, 'Room:', code, 'Network:', netName);
       setDiscoveryMode(mode);
       setRoomCode(code);
       setRoomPassword(pwd);
+      if (netName) setNetworkName(netName);
       setRoomError(null);
     });
 
@@ -531,6 +547,10 @@ export function usePeerConnection() {
       peerConnectionsRef.current.get(peerId)?.close();
       peerConnectionsRef.current.delete(peerId);
       dataChannelsRef.current.delete(peerId);
+    });
+
+    socket.on('peer-updated', (updatedPeer: PeerWithMeta) => {
+      setPeers(prev => prev.map(p => p.id === updatedPeer.id ? updatedPeer : p));
     });
 
     // File signaling
@@ -696,6 +716,7 @@ export function usePeerConnection() {
     discoveryMode,
     roomCode,
     roomPassword,
+    networkName,
     roomError,
     fileOffer,
     transfer,

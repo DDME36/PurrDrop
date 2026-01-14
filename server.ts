@@ -2,6 +2,7 @@ import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import { createHash } from 'crypto';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
@@ -27,6 +28,7 @@ interface PeerData {
 interface Peer extends PeerData {
   sockets: Set<string>;
   publicIP: string;
+  networkName: string;
   mode: DiscoveryMode;
   roomCode: string | null;
   roomPassword: string | null;
@@ -47,27 +49,61 @@ function generateRoomCode(): string {
   return code;
 }
 
-// Get client's real IP
+// Get client's real IP - รองรับ Cloud Provider หลายเจ้า
 function getClientIP(socket: Socket): string {
-  const forwarded = socket.handshake.headers['x-forwarded-for'];
-  if (forwarded) {
-    const ips = (typeof forwarded === 'string' ? forwarded : forwarded[0]).split(',');
-    return ips[0].trim();
+  const headers = socket.handshake.headers;
+  
+  // ลองหาจาก Header มาตรฐานและของ Cloud เจ้าดังๆ
+  // cf-connecting-ip: Cloudflare (แม่นยำสุดถ้าใช้ CF)
+  // x-real-ip: Nginx/Reverse Proxy ทั่วไป
+  // true-client-ip: Akamai/Cloudflare enterprise
+  // x-forwarded-for: มาตรฐาน (อาจมีหลาย IP)
+  const ipSource = 
+    headers['cf-connecting-ip'] || 
+    headers['x-real-ip'] || 
+    headers['true-client-ip'] ||
+    headers['x-forwarded-for'];
+  
+  let ip = '';
+  
+  if (ipSource) {
+    // ถ้ามีหลาย IP (proxy1, proxy2, client) เอาตัวแรกสุด
+    ip = (typeof ipSource === 'string' ? ipSource : ipSource[0]).split(',')[0].trim();
+  } else {
+    // ถ้าไม่มี Header ให้เอาจาก connection address
+    ip = socket.handshake.address || 'unknown';
   }
   
-  let ip = socket.handshake.address || 'unknown';
-  
-  // Normalize localhost variants to a common value
+  // Normalize localhost variants
   if (ip === '::1' || ip === '::ffff:127.0.0.1' || ip === '127.0.0.1') {
     return 'localhost';
   }
   
-  // Remove IPv6 prefix if present
+  // Remove IPv6 prefix if present (::ffff:)
   if (ip.startsWith('::ffff:')) {
     ip = ip.substring(7);
   }
   
   return ip;
+}
+
+// สร้างชื่อ Network จาก IP (ให้ user เห็นว่าอยู่วงไหน)
+function getNetworkName(ip: string): string {
+  if (ip === 'localhost' || ip === 'unknown') {
+    return 'Local Network';
+  }
+  
+  // สร้าง Hash สั้นๆ จาก IP
+  const hash = createHash('md5').update(ip).digest('hex').substring(0, 6);
+  
+  // แปลงเป็นชื่อ
+  const colors = ['Red', 'Blue', 'Green', 'Purple', 'Golden', 'Silver', 'Orange', 'Pink'];
+  const animals = ['Dragon', 'Panda', 'Tiger', 'Eagle', 'Shark', 'Bear', 'Wolf', 'Fox'];
+  
+  const colorIndex = parseInt(hash.substring(0, 2), 16) % colors.length;
+  const animalIndex = parseInt(hash.substring(2, 4), 16) % animals.length;
+  
+  return `${colors[colorIndex]} ${animals[animalIndex]}`;
 }
 
 // For WiFi mode: use full Public IP for matching
@@ -96,38 +132,45 @@ function emitToPeer(io: SocketIOServer, peer: Peer, event: string, data: unknown
   });
 }
 
+// Convert peer to client-safe format (no internal data)
+function peerToClientFormat(p: Peer) {
+  return {
+    id: p.id,
+    name: p.name,
+    device: p.device,
+    critter: p.critter,
+  };
+}
+
+// Check if peer A can see peer B based on discovery mode
+function canPeerSee(viewer: Peer, target: Peer): boolean {
+  if (viewer.id === target.id) return false;
+  
+  switch (viewer.mode) {
+    case 'public':
+      return target.mode === 'public';
+      
+    case 'wifi':
+      const viewerGroup = getWiFiGroupId(viewer.publicIP);
+      const targetGroup = getWiFiGroupId(target.publicIP);
+      return target.mode === 'wifi' && targetGroup === viewerGroup;
+      
+    case 'private':
+      return target.mode === 'private' && 
+             viewer.roomCode !== null && 
+             target.roomCode === viewer.roomCode;
+             
+    default:
+      return false;
+  }
+}
+
 // Get peers visible to a specific peer based on their mode
 function getVisiblePeers(peer: Peer): Peer[] {
   const visible: Peer[] = [];
-  const peerWiFiGroup = getWiFiGroupId(peer.publicIP);
   
   for (const otherPeer of peers.values()) {
-    if (otherPeer.id === peer.id) continue;
-    
-    let canSee = false;
-    
-    switch (peer.mode) {
-      case 'public':
-        // See everyone in public mode
-        canSee = otherPeer.mode === 'public';
-        break;
-        
-      case 'wifi':
-        // See only same Public IP (same WiFi network) who are also in wifi mode
-        // On cloud deployment, devices on same WiFi share the same Public IP
-        const otherWiFiGroup = getWiFiGroupId(otherPeer.publicIP);
-        canSee = otherPeer.mode === 'wifi' && otherWiFiGroup === peerWiFiGroup;
-        break;
-        
-      case 'private':
-        // See only same room code
-        canSee = otherPeer.mode === 'private' && 
-                 peer.roomCode !== null && 
-                 otherPeer.roomCode === peer.roomCode;
-        break;
-    }
-    
-    if (canSee) {
+    if (canPeerSee(peer, otherPeer)) {
       visible.push(otherPeer);
     }
   }
@@ -135,17 +178,56 @@ function getVisiblePeers(peer: Peer): Peer[] {
   return visible;
 }
 
-// Broadcast peers list to affected peers
+// Send full peer list to a specific peer (used on initial join or mode change)
+function sendFullPeerList(io: SocketIOServer, peer: Peer) {
+  const visiblePeers = getVisiblePeers(peer).map(peerToClientFormat);
+  emitToPeer(io, peer, 'peers', visiblePeers);
+}
+
+// Notify relevant peers when a new peer joins or becomes visible
+function notifyPeerJoined(io: SocketIOServer, joinedPeer: Peer) {
+  const joinedPeerData = peerToClientFormat(joinedPeer);
+  
+  for (const viewer of peers.values()) {
+    if (canPeerSee(viewer, joinedPeer)) {
+      emitToPeer(io, viewer, 'peer-joined', joinedPeerData);
+    }
+  }
+}
+
+// Notify relevant peers when a peer leaves or becomes invisible
+function notifyPeerLeft(io: SocketIOServer, leftPeerId: string, affectedViewers: Peer[]) {
+  for (const viewer of affectedViewers) {
+    emitToPeer(io, viewer, 'peer-left', leftPeerId);
+  }
+}
+
+// Notify relevant peers when a peer updates their info
+function notifyPeerUpdated(io: SocketIOServer, updatedPeer: Peer) {
+  const updatedPeerData = peerToClientFormat(updatedPeer);
+  
+  for (const viewer of peers.values()) {
+    if (canPeerSee(viewer, updatedPeer)) {
+      emitToPeer(io, viewer, 'peer-updated', updatedPeerData);
+    }
+  }
+}
+
+// Get list of peers who can currently see a specific peer
+function getViewersOf(targetPeer: Peer): Peer[] {
+  const viewers: Peer[] = [];
+  for (const viewer of peers.values()) {
+    if (canPeerSee(viewer, targetPeer)) {
+      viewers.push(viewer);
+    }
+  }
+  return viewers;
+}
+
+// Legacy broadcast - still useful for mode changes where visibility changes drastically
 function broadcastPeers(io: SocketIOServer) {
   for (const peer of peers.values()) {
-    const visiblePeers = getVisiblePeers(peer).map(p => ({
-      id: p.id,
-      name: p.name,
-      device: p.device,
-      critter: p.critter,
-    }));
-    
-    emitToPeer(io, peer, 'peers', visiblePeers);
+    sendFullPeerList(io, peer);
   }
 }
 
@@ -188,30 +270,41 @@ app.prepare().then(() => {
             mode: existingPeer.mode,
             roomCode: existingPeer.roomCode,
             roomPassword: existingPeer.roomPassword,
+            networkName: existingPeer.networkName,
           });
+          
+          // Send full peer list to reconnected peer
+          sendFullPeerList(io, existingPeer);
         } else {
           // New user - default to public mode
+          const networkName = getNetworkName(clientIP);
           const peer: Peer = {
             ...peerData,
             sockets: new Set([socket.id]),
             publicIP: clientIP,
+            networkName,
             mode: 'public',
             roomCode: null,
             roomPassword: null,
           };
           peers.set(peerData.id, peer);
           
-          console.log(`Peer joined: ${peer.name} (${peer.id}) IP: ${clientIP} Mode: public`);
+          console.log(`[JOIN] ${peer.name} | IP: ${clientIP} | Network: ${networkName}`);
           
           // Send mode info to client
           emitToPeer(io, peer, 'mode-info', { 
             mode: 'public',
             roomCode: null,
             roomPassword: null,
+            networkName,
           });
+          
+          // Send full peer list to new peer
+          sendFullPeerList(io, peer);
+          
+          // Notify others about new peer (delta update)
+          notifyPeerJoined(io, peer);
         }
-        
-        broadcastPeers(io);
       } catch (err) {
         console.error('Error in join handler:', err);
       }
@@ -265,6 +358,7 @@ app.prepare().then(() => {
                   mode: 'public',
                   roomCode: null,
                   roomPassword: null,
+                  networkName: peer.networkName,
                 });
                 broadcastPeers(io);
                 return;
@@ -310,6 +404,7 @@ app.prepare().then(() => {
           mode: peer.mode,
           roomCode: peer.roomCode,
           roomPassword: peer.roomPassword,
+          networkName: peer.networkName,
         });
         
         broadcastPeers(io);
@@ -322,7 +417,8 @@ app.prepare().then(() => {
       const peer = getPeerBySocketId(socket.id);
       if (peer) {
         peer.name = name;
-        broadcastPeers(io);
+        // Delta update - notify only peers who can see this peer
+        notifyPeerUpdated(io, peer);
       }
     });
 
@@ -330,7 +426,8 @@ app.prepare().then(() => {
       const peer = getPeerBySocketId(socket.id);
       if (peer) {
         peer.critter.emoji = emoji;
-        broadcastPeers(io);
+        // Delta update - notify only peers who can see this peer
+        notifyPeerUpdated(io, peer);
       }
     });
 
@@ -441,6 +538,9 @@ app.prepare().then(() => {
           peer.sockets.delete(socket.id);
           
           if (peer.sockets.size === 0) {
+            // Get viewers BEFORE removing peer (so we know who to notify)
+            const viewers = getViewersOf(peer);
+            
             // Remove from room if in private mode
             if (peer.mode === 'private' && peer.roomCode && rooms.has(peer.roomCode)) {
               rooms.get(peer.roomCode)!.peerIds.delete(peer.id);
@@ -452,7 +552,8 @@ app.prepare().then(() => {
             peers.delete(peer.id);
             console.log(`Peer left: ${peer.name} (${peer.id})`);
             
-            broadcastPeers(io);
+            // Delta update - notify only peers who could see this peer
+            notifyPeerLeft(io, peer.id, viewers);
           }
         }
       } catch (err) {

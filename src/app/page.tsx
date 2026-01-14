@@ -37,6 +37,7 @@ export default function Home() {
     discoveryMode,
     roomCode,
     roomPassword,
+    networkName,
     roomError,
     fileOffer,
     transfer,
@@ -184,7 +185,19 @@ export default function Home() {
   }, [transferResult, clearTransferResult]);
 
   // Smart ZIP - ฉลาดเลือกว่าจะบีบหรือไม่
-  const createZipFile = useCallback(async (files: File[]): Promise<File> => {
+  // MAX 100MB สำหรับ ZIP เพื่อป้องกัน RAM เต็ม
+  const MAX_ZIP_SIZE = 100 * 1024 * 1024;
+  
+  const createZipFile = useCallback(async (files: File[]): Promise<File | null> => {
+    // ตรวจสอบขนาดรวมก่อน
+    const totalSize = files.reduce((acc, f) => acc + f.size, 0);
+    
+    // ถ้าใหญ่เกิน limit ให้ return null (จะส่งทีละไฟล์แทน)
+    if (totalSize > MAX_ZIP_SIZE) {
+      console.warn(`⚠️ Total size ${(totalSize / 1024 / 1024).toFixed(1)}MB exceeds ZIP limit`);
+      return null;
+    }
+
     // ไฟล์ที่บีบแล้วไม่เล็กลง (already compressed)
     const SKIP_COMPRESS_TYPES = new Set([
       // Images
@@ -217,11 +230,7 @@ export default function Home() {
       return true;
     };
 
-    // ถ้าไฟล์ใหญ่รวมกัน > 100MB แจ้งเตือน
-    const totalSize = files.reduce((acc, f) => acc + f.size, 0);
-    if (totalSize > 100 * 1024 * 1024) {
-      console.log(`⚠️ Large ZIP: ${(totalSize / 1024 / 1024).toFixed(1)}MB - using Store mode`);
-    }
+    console.log(`📦 Creating ZIP: ${files.length} files, ${(totalSize / 1024 / 1024).toFixed(1)}MB`);
 
     let zipSize = 22;
     const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number; compressed: boolean }[] = [];
@@ -326,7 +335,19 @@ export default function Home() {
   const handleMultiFiles = useCallback(async (files: File[], peer: Peer) => {
     if (files.length === 0) return;
     
+    // ไฟล์เดียว ส่งตรงๆ
     if (files.length === 1) {
+      sendFile(peer, files[0]);
+      play('whoosh');
+      return;
+    }
+
+    // หลายไฟล์ - ลอง ZIP ถ้าขนาดไม่เกิน limit
+    const totalSize = files.reduce((acc, f) => acc + f.size, 0);
+    
+    // ถ้าใหญ่เกิน 100MB ส่งทีละไฟล์แทน
+    if (totalSize > 100 * 1024 * 1024) {
+      toastRef.current?.show(`ไฟล์รวมใหญ่เกิน 100MB - ส่งไฟล์แรก (${files[0].name})`, 'warning');
       sendFile(peer, files[0]);
       play('whoosh');
       return;
@@ -336,9 +357,16 @@ export default function Home() {
     
     try {
       const zipFile = await createZipFile(files);
-      sendFile(peer, zipFile);
-      play('whoosh');
-      toastRef.current?.show(`ส่ง ${zipFile.name} แล้ว`, 'success');
+      if (zipFile) {
+        sendFile(peer, zipFile);
+        play('whoosh');
+        toastRef.current?.show(`ส่ง ${zipFile.name} แล้ว`, 'success');
+      } else {
+        // ZIP failed, send first file
+        toastRef.current?.show('สร้าง ZIP ไม่สำเร็จ ส่งไฟล์แรกแทน', 'warning');
+        sendFile(peer, files[0]);
+        play('whoosh');
+      }
     } catch {
       toastRef.current?.show('สร้าง ZIP ไม่สำเร็จ ส่งไฟล์แรกแทน', 'warning');
       sendFile(peer, files[0]);
@@ -423,6 +451,7 @@ export default function Home() {
           mode={discoveryMode}
           roomCode={roomCode}
           roomPassword={roomPassword}
+          networkName={networkName}
           onChangeMode={setMode}
         />
 
