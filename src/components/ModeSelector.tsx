@@ -21,7 +21,7 @@ const modeConfig = {
 export function ModeSelector({ mode, roomCode, roomPassword, networkName, onChangeMode }: ModeSelectorProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showJoinInput, setShowJoinInput] = useState(false);
-  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [showPrivateOptions, setShowPrivateOptions] = useState(false);
   const [inputCode, setInputCode] = useState('');
   const [inputPassword, setInputPassword] = useState('');
   const [newRoomPassword, setNewRoomPassword] = useState('');
@@ -32,18 +32,19 @@ export function ModeSelector({ mode, roomCode, roomPassword, networkName, onChan
 
   const handleSelectMode = (newMode: DiscoveryMode) => {
     if (newMode === 'private') {
-      // Show create room options
-      setShowCreateRoom(true);
+      // Show private options (create/join)
+      setShowPrivateOptions(true);
     } else {
       onChangeMode(newMode);
       setShowMenu(false);
+      setShowPrivateOptions(false);
     }
   };
 
   const handleCreateRoom = () => {
     // Create room with optional password
     onChangeMode('private', undefined, newRoomPassword || undefined);
-    setShowCreateRoom(false);
+    setShowPrivateOptions(false);
     setNewRoomPassword('');
     setShowMenu(false);
   };
@@ -52,6 +53,7 @@ export function ModeSelector({ mode, roomCode, roomPassword, networkName, onChan
     if (inputCode.length === 5) {
       onChangeMode('private', inputCode, inputPassword || undefined);
       setShowJoinInput(false);
+      setShowPrivateOptions(false);
       setInputCode('');
       setInputPassword('');
       setShowMenu(false);
@@ -80,6 +82,14 @@ export function ModeSelector({ mode, roomCode, roomPassword, networkName, onChan
     }
   };
 
+  const handleBackToModes = () => {
+    setShowPrivateOptions(false);
+    setShowJoinInput(false);
+    setInputCode('');
+    setInputPassword('');
+    setNewRoomPassword('');
+  };
+
   return (
     <div className="mode-selector">
       <button 
@@ -103,8 +113,8 @@ export function ModeSelector({ mode, roomCode, roomPassword, networkName, onChan
 
       {showMenu && (
         <div className="mode-menu">
-          {/* Mode options */}
-          {(Object.keys(modeConfig) as DiscoveryMode[]).map((m) => (
+          {/* Mode options - ซ่อนเมื่อเลือก private แล้ว */}
+          {!showPrivateOptions && (Object.keys(modeConfig) as DiscoveryMode[]).map((m) => (
             <button
               key={m}
               className={`mode-option ${mode === m ? 'active' : ''}`}
@@ -119,42 +129,86 @@ export function ModeSelector({ mode, roomCode, roomPassword, networkName, onChan
             </button>
           ))}
 
-          {/* Create room with password */}
-          {showCreateRoom && (
-            <div className="mode-create-room">
-              <div className="mode-create-header">✨ สร้างห้องใหม่</div>
-              <div className="mode-password-input">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="รหัสผ่าน (ไม่บังคับ)"
-                  value={newRoomPassword}
-                  onChange={(e) => setNewRoomPassword(e.target.value)}
-                  maxLength={20}
-                />
-                <button 
-                  className="mode-show-pwd"
-                  onClick={() => setShowPassword(!showPassword)}
-                  type="button"
-                >
-                  {showPassword ? '🙈' : '👁️'}
-                </button>
-              </div>
-              <div className="mode-create-actions">
+          {/* Private options - สร้างห้อง/เข้าห้อง */}
+          {showPrivateOptions && !showJoinInput && (
+            <div className="mode-private-options">
+              <button className="mode-back-btn" onClick={handleBackToModes}>
+                ← กลับ
+              </button>
+              
+              <div className="mode-create-room">
+                <div className="mode-create-header">✨ สร้างห้องใหม่</div>
+                <div className="mode-password-input">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="รหัสผ่าน (ไม่บังคับ)"
+                    value={newRoomPassword}
+                    onChange={(e) => setNewRoomPassword(e.target.value)}
+                    maxLength={20}
+                  />
+                  <button 
+                    className="mode-show-pwd"
+                    onClick={() => setShowPassword(!showPassword)}
+                    type="button"
+                  >
+                    {showPassword ? '🙈' : '👁️'}
+                  </button>
+                </div>
                 <button className="mode-create-btn" onClick={handleCreateRoom}>
                   สร้างห้อง
                 </button>
+              </div>
+
+              <div className="mode-divider">
+                <span>หรือ</span>
+              </div>
+
+              <button 
+                className="mode-join-room"
+                onClick={() => setShowJoinInput(true)}
+              >
+                🚪 เข้าห้องด้วยรหัส
+              </button>
+            </div>
+          )}
+
+          {/* Join room input */}
+          {showPrivateOptions && showJoinInput && (
+            <div className="mode-join-section">
+              <button className="mode-back-btn" onClick={() => setShowJoinInput(false)}>
+                ← กลับ
+              </button>
+              <div className="mode-join-header">🚪 เข้าห้อง</div>
+              <div className="mode-join-input">
+                <input
+                  type="text"
+                  maxLength={5}
+                  placeholder="รหัส 5 หลัก"
+                  value={inputCode}
+                  onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={(e) => e.key === 'Enter' && inputCode.length === 5 && handleJoinRoom()}
+                  autoFocus
+                />
+                <input
+                  type="password"
+                  placeholder="รหัสผ่าน (ถ้ามี)"
+                  value={inputPassword}
+                  onChange={(e) => setInputPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && inputCode.length === 5 && handleJoinRoom()}
+                />
                 <button 
-                  className="mode-cancel-btn"
-                  onClick={() => { setShowCreateRoom(false); setNewRoomPassword(''); }}
+                  className="mode-join-btn"
+                  onClick={handleJoinRoom}
+                  disabled={inputCode.length !== 5}
                 >
-                  ยกเลิก
+                  เข้าห้อง
                 </button>
               </div>
             </div>
           )}
 
-          {/* Private mode extras */}
-          {mode === 'private' && roomCode && !showCreateRoom && (
+          {/* Private mode info - แสดงเมื่ออยู่ในห้องแล้ว */}
+          {mode === 'private' && roomCode && !showPrivateOptions && (
             <div className="mode-private-info">
               <div className="mode-room-display">
                 <span className="mode-room-label">รหัสห้อง:</span>
@@ -180,45 +234,14 @@ export function ModeSelector({ mode, roomCode, roomPassword, networkName, onChan
             </div>
           )}
 
-          {/* Join room input */}
-          {showJoinInput ? (
-            <div className="mode-join-input">
-              <input
-                type="text"
-                maxLength={5}
-                placeholder="รหัส 5 หลัก"
-                value={inputCode}
-                onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))}
-                onKeyDown={(e) => e.key === 'Enter' && inputCode.length === 5 && handleJoinRoom()}
-                autoFocus
-              />
-              <input
-                type="password"
-                placeholder="รหัสผ่าน (ถ้ามี)"
-                value={inputPassword}
-                onChange={(e) => setInputPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && inputCode.length === 5 && handleJoinRoom()}
-              />
-              <div className="mode-join-actions">
-                <button 
-                  className="mode-join-btn"
-                  onClick={handleJoinRoom}
-                  disabled={inputCode.length !== 5}
-                >
-                  เข้าห้อง
-                </button>
-                <button 
-                  className="mode-cancel-btn"
-                  onClick={() => { setShowJoinInput(false); setInputCode(''); setInputPassword(''); }}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          ) : !showCreateRoom && (
+          {/* Join existing room - แสดงเมื่อไม่ได้อยู่ใน private mode */}
+          {!showPrivateOptions && mode !== 'private' && (
             <button 
               className="mode-join-room"
-              onClick={() => setShowJoinInput(true)}
+              onClick={() => {
+                setShowPrivateOptions(true);
+                setShowJoinInput(true);
+              }}
             >
               🚪 เข้าห้องด้วยรหัส
             </button>
@@ -230,7 +253,7 @@ export function ModeSelector({ mode, roomCode, roomPassword, networkName, onChan
       {showMenu && (
         <div className="mode-backdrop" onClick={() => {
           setShowMenu(false);
-          setShowCreateRoom(false);
+          setShowPrivateOptions(false);
           setShowJoinInput(false);
         }} />
       )}

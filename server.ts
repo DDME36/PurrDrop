@@ -259,7 +259,7 @@ app.prepare().then(() => {
         const existingPeer = peers.get(peerData.id);
         
         if (existingPeer) {
-          // Same user, new tab
+          // Same user, new tab or reconnect
           existingPeer.sockets.add(socket.id);
           existingPeer.name = peerData.name;
           existingPeer.critter = peerData.critter;
@@ -275,6 +275,9 @@ app.prepare().then(() => {
           
           // Send full peer list to reconnected peer
           sendFullPeerList(io, existingPeer);
+          
+          // Notify others about updated peer info (emoji/name might have changed)
+          notifyPeerUpdated(io, existingPeer);
         } else {
           // New user - default to public mode
           const networkName = getNetworkName(clientIP);
