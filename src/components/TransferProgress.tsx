@@ -139,14 +139,49 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
   if (!isVisible) return null;
 
   const statusConfig = {
-    sending: { text: 'กำลังส่ง', icon: '📤', color: 'var(--accent-mint)' },
-    receiving: { text: 'กำลังรับ', icon: '📥', color: 'var(--accent-peach)' },
-    complete: { text: 'เสร็จแล้ว!', icon: '✅', color: 'var(--accent-mint)' },
-    error: { text: 'ผิดพลาด', icon: '❌', color: '#ff6b6b' },
+    sending: { text: 'กำลังส่ง', icon: 'upload', color: 'var(--accent-mint)' },
+    receiving: { text: 'กำลังรับ', icon: 'download', color: 'var(--accent-peach)' },
+    complete: { text: 'เสร็จแล้ว!', icon: 'check', color: 'var(--accent-mint)' },
+    error: { text: 'ผิดพลาด', icon: 'x', color: '#ff6b6b' },
   };
 
   const config = statusConfig[status];
   const isActive = status === 'sending' || status === 'receiving';
+
+  // Status icons as SVG
+  const StatusIcon = () => {
+    if (config.icon === 'upload') {
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 17V3"/>
+          <path d="m6 8 6-6 6 6"/>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        </svg>
+      );
+    }
+    if (config.icon === 'download') {
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 15V3"/>
+          <path d="m7 10 5 5 5-5"/>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        </svg>
+      );
+    }
+    if (config.icon === 'check') {
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6 9 17l-5-5"/>
+        </svg>
+      );
+    }
+    return (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 6 6 18"/>
+        <path d="m6 6 12 12"/>
+      </svg>
+    );
+  };
 
   return (
     <div className={`transfer-overlay ${showSuccess ? 'success-state' : ''} ${isClosing ? 'closing' : ''}`}>
@@ -181,7 +216,7 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
               <div className="transfer-peer-name">{peerName}</div>
 
               <div className="transfer-status-row">
-                <span className="transfer-status-icon">{config.icon}</span>
+                <span className="transfer-status-icon"><StatusIcon /></span>
                 <span className="transfer-status-text" style={{ color: config.color }}>{config.text}</span>
               </div>
 
@@ -209,15 +244,29 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
               {isActive && fileSize > 0 && (
                 <div className="transfer-stats">
                   <div className="transfer-stat">
-                    <span className="stat-icon">📊</span>
+                    <span className="stat-icon">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 3v16a2 2 0 0 0 2 2h16"/>
+                        <path d="m19 9-5 5-4-4-3 3"/>
+                      </svg>
+                    </span>
                     <span>{formatBytes((progress / 100) * fileSize)} / {formatBytes(fileSize)}</span>
                   </div>
                   <div className="transfer-stat">
-                    <span className="stat-icon">⚡</span>
+                    <span className="stat-icon">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+                      </svg>
+                    </span>
                     <span>{formatBytes(speed)}/s</span>
                   </div>
                   <div className="transfer-stat">
-                    <span className="stat-icon">⏱️</span>
+                    <span className="stat-icon">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                    </span>
                     <span>{formatTime(eta)}</span>
                   </div>
                 </div>

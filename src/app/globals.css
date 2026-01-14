@@ -674,8 +674,16 @@ body {
 .empty-modes {
   font-size: 13px;
   color: var(--text-muted);
-  display: inline-block;
-  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.empty-modes svg {
+  vertical-align: middle;
+  stroke: var(--text-muted);
 }
 
 .empty-actions {
@@ -740,6 +748,10 @@ body {
   box-shadow: 0 4px 15px rgba(255, 107, 157, 0.4);
 }
 
+.feedback-badge svg {
+  stroke: white;
+}
+
 .feedback-badge:hover {
   transform: translateY(-2px) scale(1.05);
   box-shadow: 0 6px 20px rgba(255, 107, 157, 0.5);
@@ -765,6 +777,10 @@ body {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(255, 107, 157, 0.4);
+}
+
+.feedback-btn svg {
+  stroke: white;
 }
 
 .feedback-btn:hover {
@@ -832,6 +848,12 @@ body {
   background: rgba(0, 0, 0, 0.08);
   font-size: 12px;
   font-weight: 700;
+}
+
+.btn-pastel .btn-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
 }
 
 .btn-pastel:hover {
@@ -1544,6 +1566,13 @@ body {
 
 .stat-icon {
   font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon svg {
+  stroke: var(--text-muted);
 }
 
 .transfer-complete-msg {
@@ -1625,6 +1654,9 @@ body {
   margin-bottom: 20px;
   animation: modalIconBounce 1s ease-in-out infinite;
   filter: drop-shadow(0 8px 16px rgba(255, 179, 209, 0.4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 [data-theme="dark"] .modal-icon {
@@ -1650,6 +1682,15 @@ body {
   background: linear-gradient(135deg, var(--text-primary), var(--accent-pink));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.modal-title svg {
+  stroke: var(--accent-pink);
+  flex-shrink: 0;
 }
 
 .modal-sender {
@@ -1850,12 +1891,30 @@ body {
 .step-icon {
   font-size: 36px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, rgba(255, 179, 209, 0.2), rgba(168, 230, 207, 0.2));
+  border-radius: 12px;
 }
 
 .step-text {
   font-size: 14px;
   color: var(--text-primary);
   line-height: 1.5;
+}
+
+.step-text small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+}
+
+.step-text small svg {
+  flex-shrink: 0;
 }
 
 /* Success Modal - Clean & Pro */
@@ -1967,6 +2026,17 @@ body {
   background: linear-gradient(135deg, var(--accent-pink), #ff8fab);
   color: white;
 }
+
+.toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast.success .toast-icon svg { stroke: var(--accent-mint); }
+.toast.error .toast-icon svg { stroke: #f87171; }
+.toast.warning .toast-icon svg { stroke: #f59e0b; }
+.toast.info .toast-icon svg { stroke: white; }
 
 /* Dark mode toast */
 [data-theme="dark"] .toast {
@@ -2225,6 +2295,12 @@ body {
   margin-top: 0;
   margin-bottom: auto;
   position: relative;
+  text-align: center;
+}
+
+.modal-input-modal .modal-icon {
+  animation: none;
+  margin: 0 auto 16px;
 }
 
 /* iOS specific fixes */
@@ -2285,11 +2361,22 @@ body {
   padding: 4px 8px;
   border-radius: 8px;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close svg {
+  stroke: var(--text-muted);
 }
 
 .modal-close:hover {
   background: var(--border-color);
   color: var(--text-primary);
+}
+
+.modal-close:hover svg {
+  stroke: var(--text-primary);
 }
 
 .history-list {
@@ -2307,8 +2394,14 @@ body {
 
 .history-empty-icon {
   font-size: 48px;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 12px;
+}
+
+.history-empty-icon svg {
+  stroke: var(--text-muted);
 }
 
 .history-item {
@@ -2336,6 +2429,17 @@ body {
 
 .history-icon {
   font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history-icon svg {
+  stroke: var(--accent-mint);
+}
+
+.history-item.received .history-icon svg {
+  stroke: var(--accent-pink);
 }
 
 .history-info {
@@ -2435,10 +2539,21 @@ body {
   cursor: pointer;
   font-size: 16px;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-paste svg {
+  stroke: var(--text-secondary);
 }
 
 .btn-paste:hover {
   background: var(--accent-lavender);
+}
+
+.btn-paste:hover svg {
+  stroke: white;
 }
 
 .peer-select {
@@ -2679,10 +2794,14 @@ body {
   opacity: 0.3;
   transition: all 0.2s;
   padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .star-btn:hover {
   transform: scale(1.2);
+  opacity: 0.7;
 }
 
 .star-btn.active {
@@ -2722,6 +2841,9 @@ body {
   font-size: 64px;
   margin-bottom: 16px;
   animation: heartBeat 1s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @keyframes heartBeat {
@@ -2773,6 +2895,9 @@ body {
 .warning-icon {
   font-size: 64px;
   margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .warning-title {
@@ -2817,6 +2942,20 @@ body {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.warning-hint svg {
+  stroke: var(--accent-peach);
+  flex-shrink: 0;
+}
+
+.warning-actions .btn svg {
+  stroke: currentColor;
 }
 
 
@@ -2829,8 +2968,8 @@ body {
 .mode-current {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: 10px;
+  padding: 12px 20px;
   background: var(--bg-card);
   border: 2px solid var(--border-color);
   border-radius: 50px;
@@ -2846,11 +2985,13 @@ body {
 }
 
 .mode-icon {
-  font-size: 18px;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
 }
 
 .mode-label {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -3092,8 +3233,8 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  font-weight: 700;
-  font-family: var(--font-display);
+  font-weight: 600;
+  font-family: var(--font-body);
   color: var(--text-primary);
   background: var(--bg-card);
   transition: all 0.2s;
@@ -3117,9 +3258,9 @@ body {
 
 .mode-numpad-btn {
   padding: 12px;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   border: none;
   border-radius: 10px;
   background: var(--bg-card);
@@ -3498,6 +3639,86 @@ body {
   color: var(--accent-pink);
 }
 
+/* SVG Icons for Mode Selector */
+.mode-svg-icon {
+  width: 22px;
+  height: 22px;
+  stroke: var(--accent-pink);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.mode-svg-icon-sm {
+  width: 18px;
+  height: 18px;
+  stroke: var(--accent-pink);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* Icon colors for different modes */
+.mode-option:hover .mode-svg-icon {
+  stroke: var(--accent-pink);
+  filter: drop-shadow(0 0 4px rgba(255, 179, 209, 0.5));
+}
+
+.mode-option.active .mode-svg-icon {
+  stroke: var(--accent-pink);
+}
+
+/* Private panel icons */
+.mode-private-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.mode-private-label .mode-svg-icon-sm {
+  stroke: var(--accent-pink);
+}
+
+/* Copy button icons */
+.mode-copy-btn-big {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mode-copy-btn-big .mode-svg-icon-sm {
+  stroke: white;
+}
+
+/* Join room button icon */
+.mode-join-room {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mode-join-room .mode-svg-icon {
+  stroke: var(--text-secondary);
+}
+
+.mode-join-room:hover .mode-svg-icon {
+  stroke: var(--accent-pink);
+}
+
+/* Join modal header with icon */
+.mode-join-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mode-join-header .mode-svg-icon {
+  stroke: var(--accent-pink);
+}
+
 /* Dark mode */
 [data-theme="dark"] .mode-menu {
   background: rgba(37, 37, 66, 0.98);
@@ -3528,6 +3749,16 @@ body {
 
 
 /* QR Modal enhancements */
+.qr-mode-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-mode-icon svg {
+  stroke: var(--accent-pink);
+}
+
 .qr-mode-badge {
   display: inline-flex;
   align-items: center;
@@ -3539,6 +3770,12 @@ body {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 16px;
+}
+
+.qr-mode-badge svg {
+  stroke: white;
+  width: 16px;
+  height: 16px;
 }
 
 .qr-room-code {
@@ -3569,10 +3806,21 @@ body {
   cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-copy-btn svg {
+  stroke: var(--text-secondary);
 }
 
 .qr-copy-btn:hover {
   background: var(--accent-mint);
+}
+
+.qr-copy-btn:hover svg {
+  stroke: white;
 }
 
 [data-theme="dark"] .qr-copy-btn {

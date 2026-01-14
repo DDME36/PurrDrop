@@ -2,6 +2,51 @@
 
 import { useState, useEffect } from 'react';
 
+// Lucide Icons
+const GlobeIcon = () => (
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-pink)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+    <path d="M2 12h20"/>
+  </svg>
+);
+
+const AlertTriangleIcon = () => (
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/>
+    <path d="M12 9v4"/>
+    <path d="M12 17h.01"/>
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+  </svg>
+);
+
+const LightbulbIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+    <path d="M9 18h6"/>
+    <path d="M10 22h4"/>
+  </svg>
+);
+
+const XIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18"/>
+    <path d="m6 6 12 12"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 6 9 17l-5-5"/>
+  </svg>
+);
+
 export function BrowserWarning() {
   const [showWarning, setShowWarning] = useState<'inapp' | 'duplicate' | null>(null);
   const [currentUrl, setCurrentUrl] = useState('');
@@ -117,7 +162,7 @@ export function BrowserWarning() {
       <div className="browser-warning-card">
         {showWarning === 'inapp' ? (
           <>
-            <div className="warning-icon">🌐</div>
+            <div className="warning-icon"><GlobeIcon /></div>
             <h2 className="warning-title">เปิดใน Safari / Chrome</h2>
             <p className="warning-text">
               คุณกำลังใช้ In-App Browser ซึ่งไม่รองรับการส่งไฟล์
@@ -127,16 +172,16 @@ export function BrowserWarning() {
             <div className="warning-url">{currentUrl}</div>
             <div className="warning-actions">
               <button className="btn btn-accept" onClick={handleCopyUrl}>
-                📋 คัดลอก URL
+                <CopyIcon /> คัดลอก URL
               </button>
             </div>
             <p className="warning-hint">
-              💡 หรือกดปุ่ม <strong>⋯</strong> ด้านบน แล้วเลือก <strong>"Open in Safari"</strong> หรือ <strong>"Open in Chrome"</strong>
+              <LightbulbIcon /> หรือกดปุ่ม <strong>⋯</strong> ด้านบน แล้วเลือก <strong>"Open in Safari"</strong> หรือ <strong>"Open in Chrome"</strong>
             </p>
           </>
         ) : (
           <>
-            <div className="warning-icon">⚠️</div>
+            <div className="warning-icon"><AlertTriangleIcon /></div>
             <h2 className="warning-title">เปิดหลายหน้าต่าง</h2>
             <p className="warning-text">
               PurrDrop เปิดอยู่หลายแท็บ/หน้าต่าง
@@ -147,10 +192,10 @@ export function BrowserWarning() {
             </p>
             <div className="warning-actions">
               <button className="btn btn-reject" onClick={handleCloseTab}>
-                ✕ ปิดแท็บนี้
+                <XIcon /> ปิดแท็บนี้
               </button>
               <button className="btn btn-accept" onClick={() => setShowWarning(null)}>
-                ✓ ใช้แท็บนี้
+                <CheckIcon /> ใช้แท็บนี้
               </button>
             </div>
           </>

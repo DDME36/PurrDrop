@@ -2,6 +2,33 @@
 
 import { useState } from 'react';
 
+// Lucide Icons
+const MessageCircleIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
+  </svg>
+);
+
+const HeartIcon = () => (
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="var(--accent-pink)" stroke="var(--accent-pink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+  </svg>
+);
+
+const StarIcon = ({ active }: { active: boolean }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "#fbbf24" : "none"} stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+  </svg>
+);
+
+const XCircleIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="m15 9-6 6"/>
+    <path d="m9 9 6 6"/>
+  </svg>
+);
+
 interface FeedbackModalProps {
   show: boolean;
   onClose: () => void;
@@ -55,17 +82,17 @@ export function FeedbackModal({ show, onClose }: FeedbackModalProps) {
       <div className="modal-content modal-feedback" onClick={e => e.stopPropagation()}>
         {sent ? (
           <div className="feedback-success">
-            <div className="feedback-success-icon">💖</div>
+            <div className="feedback-success-icon"><HeartIcon /></div>
             <div className="feedback-success-text">ขอบคุณสำหรับ Feedback!</div>
           </div>
         ) : (
           <>
-            <div className="modal-title">💬 ส่ง Feedback</div>
+            <div className="modal-title"><MessageCircleIcon /> ส่ง Feedback</div>
             <p className="feedback-subtitle">ช่วยให้เราพัฒนา PurrDrop ให้ดีขึ้น</p>
             
             {error && (
               <div className="feedback-error">
-                ❌ ส่งไม่สำเร็จ กรุณาลองใหม่
+                <XCircleIcon /> ส่งไม่สำเร็จ กรุณาลองใหม่
               </div>
             )}
             
@@ -78,7 +105,7 @@ export function FeedbackModal({ show, onClose }: FeedbackModalProps) {
                     className={`star-btn ${rating >= star ? 'active' : ''}`}
                     onClick={() => setRating(star)}
                   >
-                    ⭐
+                    <StarIcon active={rating >= star} />
                   </button>
                 ))}
               </div>

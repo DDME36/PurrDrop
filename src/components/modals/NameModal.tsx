@@ -2,6 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 
+// Lucide Icon
+const PencilIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent-pink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>
+    <path d="m15 5 4 4"/>
+  </svg>
+);
+
 interface NameModalProps {
   show: boolean;
   currentName: string;
@@ -46,7 +54,7 @@ export function NameModal({ show, currentName, onSubmit, onClose }: NameModalPro
   return (
     <div className="modal show modal-keyboard-aware">
       <div className="modal-content modal-small modal-input-modal">
-        <div className="modal-icon">✏️</div>
+        <div className="modal-icon"><PencilIcon /></div>
         <div className="modal-title">ตั้งชื่อใหม่</div>
         <input
           ref={inputRef}
