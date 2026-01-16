@@ -698,9 +698,9 @@ body {
   font-size: 15px;
 }
 
-/* Mobile inline footer in empty state - hidden on desktop */
+/* Footer in empty state - always visible */
 .empty-footer-mobile {
-  display: none;
+  display: block;
   margin-top: 20px;
   text-align: center;
 }
