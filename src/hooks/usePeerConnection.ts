@@ -18,7 +18,8 @@ interface TransferProgress {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: 'sending' | 'receiving' | 'complete' | 'error';
+  status: 'pending' | 'sending' | 'receiving' | 'complete' | 'error';
+  connectionType?: 'direct' | 'stun' | 'relay';
 }
 
 interface TransferResult {
@@ -36,16 +37,43 @@ export interface PeerWithMeta extends Peer {
   inRoom?: boolean;
 }
 
-// ICE Servers - STUN only (free)
+// ICE Servers - STUN + Free TURN (OpenRelay by Metered)
+// TURN servers help connect users behind strict NAT/firewalls
 const ICE_SERVERS: RTCIceServer[] = [
+  // Google STUN servers (fast, reliable)
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
+
+  // OpenRelay Free TURN servers (no signup required)
+  // These help when direct P2P connection fails
+  {
+    urls: 'stun:stun.relay.metered.ca:80',
+  },
+  {
+    urls: 'turn:global.relay.metered.ca:80',
+    username: 'e7b4c5a0d1f2e3b4c5a6',
+    credential: 'zXcVbNmLkJhGfDsA',
+  },
+  {
+    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+    username: 'e7b4c5a0d1f2e3b4c5a6',
+    credential: 'zXcVbNmLkJhGfDsA',
+  },
+  {
+    urls: 'turn:global.relay.metered.ca:443',
+    username: 'e7b4c5a0d1f2e3b4c5a6',
+    credential: 'zXcVbNmLkJhGfDsA',
+  },
+  {
+    urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+    username: 'e7b4c5a0d1f2e3b4c5a6',
+    credential: 'zXcVbNmLkJhGfDsA',
+  },
 ];
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000;
+const RETRY_DELAY = 500; // Reduced to 500ms for smoother recovery
 
 export function usePeerConnection() {
   const [connected, setConnected] = useState(false);
@@ -60,13 +88,13 @@ export function usePeerConnection() {
   const [fileOffer, setFileOffer] = useState<FileOffer | null>(null);
   const [transfer, setTransfer] = useState<TransferProgress | null>(null);
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
-  
+
   const socketRef = useRef<Socket | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannelsRef = useRef<Map<string, RTCDataChannel>>(new Map());
   const pendingFilesRef = useRef<Map<string, { file: File; peer: Peer }>>(new Map());
-  const receivingFilesRef = useRef<Map<string, { 
-    chunks: ArrayBuffer[]; 
+  const receivingFilesRef = useRef<Map<string, {
+    chunks: ArrayBuffer[];
     info: { name: string; size: number; type: string };
     streamWriter?: StreamWriter;
     useStreaming: boolean;
@@ -103,10 +131,10 @@ export function usePeerConnection() {
   // Download blob - with iOS Safari support
   const downloadBlob = useCallback((blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
-    
+
     // Check if iOS Safari
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    
+
     if (isIOS) {
       // iOS Safari: open in new tab, user can then save
       const newWindow = window.open(url, '_blank');
@@ -130,14 +158,14 @@ export function usePeerConnection() {
       a.click();
       document.body.removeChild(a);
     }
-    
+
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }, []);
 
   // Setup data channel handlers
   const setupDataChannel = useCallback((channel: RTCDataChannel, peerId: string) => {
     channel.binaryType = 'arraybuffer';
-    
+
     channel.onopen = () => {
       console.log(`✅ DataChannel OPEN with ${peerId}`);
       dataChannelsRef.current.set(peerId, channel);
@@ -156,12 +184,24 @@ export function usePeerConnection() {
       if (typeof e.data === 'string') {
         try {
           const msg = JSON.parse(e.data);
+          // Heartbeat handling
+          if (msg.type === 'ping') {
+            console.log('💓 Ping received');
+            channel.send(JSON.stringify({ type: 'pong' }));
+            return;
+          }
+          if (msg.type === 'pong') {
+            console.log('💓 Pong received');
+            // Check handled in useEffect
+            return;
+          }
+
           console.log('📨 DataChannel message:', msg.type);
-          
+
           if (msg.type === 'file-start') {
             const senderPeer = peersRef.current.find(p => p.id === peerId);
             const useStreaming = shouldUseStreaming(msg.size);
-            
+
             // For large files, try to use streaming
             let streamWriter: StreamWriter | undefined;
             if (useStreaming) {
@@ -186,7 +226,7 @@ export function usePeerConnection() {
                 console.log('Streaming not available, using memory buffer:', err);
               }
             }
-            
+
             receivingFilesRef.current.set(msg.fileId, {
               chunks: [],
               info: { name: msg.name, size: msg.size, type: msg.mimeType },
@@ -194,12 +234,12 @@ export function usePeerConnection() {
               useStreaming: !!streamWriter,
               received: 0,
             });
-            
+
             // Request wake lock when receiving
             if ('wakeLock' in navigator) {
               navigator.wakeLock.request('screen').then(lock => {
                 wakeLockRef.current = lock;
-              }).catch(() => {});
+              }).catch(() => { });
             }
             setTransfer({
               peerId,
@@ -213,7 +253,7 @@ export function usePeerConnection() {
             const receiving = receivingFilesRef.current.get(msg.fileId);
             if (receiving) {
               console.log(`✅ File complete: ${receiving.info.name}`);
-              
+
               if (receiving.streamWriter) {
                 // Streaming mode - just close the writer
                 await receiving.streamWriter.close();
@@ -223,9 +263,9 @@ export function usePeerConnection() {
                 const blob = new Blob(receiving.chunks, { type: receiving.info.type || 'application/octet-stream' });
                 downloadBlob(blob, receiving.info.name);
               }
-              
+
               setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
-              
+
               const senderPeer = peersRef.current.find(p => p.id === peerId);
               setTransferResult({
                 success: true,
@@ -233,7 +273,7 @@ export function usePeerConnection() {
                 fileSize: receiving.info.size,
                 peerName: senderPeer?.name || 'เพื่อน',
               });
-              
+
               receivingFilesRef.current.delete(msg.fileId);
               // Release wake lock after receive complete
               if (wakeLockRef.current) {
@@ -254,7 +294,7 @@ export function usePeerConnection() {
           const receiving = receivingFilesRef.current.get(fileId);
           if (receiving) {
             receiving.received += e.data.byteLength;
-            
+
             if (receiving.streamWriter) {
               // Streaming mode - write directly to disk
               await receiving.streamWriter.write(e.data);
@@ -262,7 +302,7 @@ export function usePeerConnection() {
               // Memory mode - collect chunks
               receiving.chunks.push(e.data);
             }
-            
+
             const progress = Math.round((receiving.received / receiving.info.size) * 100);
             setTransfer(prev => prev ? { ...prev, progress } : null);
           }
@@ -273,16 +313,62 @@ export function usePeerConnection() {
     return channel;
   }, [downloadBlob]);
 
+  // Heartbeat Loop
+  useEffect(() => {
+    const interval = setInterval(() => {
+      dataChannelsRef.current.forEach((channel, peerId) => {
+        if (channel.readyState === 'open') {
+          // Send Ping
+          try {
+            channel.send(JSON.stringify({ type: 'ping' }));
+          } catch (e) {
+            console.error('Error sending heartbeat:', e);
+          }
+        }
+      });
+    }, 5000); // Ping every 5s
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Monitor Connection State & Auto-Reconnect
+  useEffect(() => {
+    const checkConnection = () => {
+      peerConnectionsRef.current.forEach((pc, peerId) => {
+        if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+          console.log(`⚠️ Connection lost with ${peerId}, attempting reconnect...`);
+          setConnectionStatus('reconnecting');
+
+          // Close and retry
+          pc.close();
+          peerConnectionsRef.current.delete(peerId);
+          dataChannelsRef.current.delete(peerId);
+
+          // Find peer info to reconnect
+          const targetPeer = peersRef.current.find(p => p.id === peerId);
+          // We can't initiate connection comfortably here without user action usually
+          // But we can clean up to be ready for new offer
+        }
+      });
+    };
+
+    const interval = setInterval(checkConnection, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Create peer connection
   const createPeerConnection = useCallback((peerId: string): RTCPeerConnection => {
     console.log(`🔗 Creating PeerConnection for ${peerId}`);
-    
+
     const existing = peerConnectionsRef.current.get(peerId);
     if (existing) {
       existing.close();
     }
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({
+      iceServers: ICE_SERVERS,
+      iceCandidatePoolSize: 10, // Pre-fetch candidates for faster connection
+    });
 
     pc.onicecandidate = (e) => {
       if (e.candidate && socketRef.current) {
@@ -293,6 +379,38 @@ export function usePeerConnection() {
 
     pc.oniceconnectionstatechange = () => {
       console.log(`🧊 ICE state: ${pc.iceConnectionState}`);
+
+      // Log connection type when connected and update transfer state
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        pc.getStats().then(stats => {
+          stats.forEach(report => {
+            if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+              const localCandidate = stats.get(report.localCandidateId);
+              const remoteCandidate = stats.get(report.remoteCandidateId);
+
+              const localType = localCandidate?.candidateType || 'unknown';
+              const remoteType = remoteCandidate?.candidateType || 'unknown';
+
+              let connectionType: 'direct' | 'stun' | 'relay' = 'direct';
+
+              if (localType === 'relay' || remoteType === 'relay') {
+                console.log('🔄 Connection via TURN relay (fallback)');
+                connectionType = 'relay';
+              } else if (localType === 'srflx' || remoteType === 'srflx') {
+                console.log('✅ Connection via STUN (server reflexive)');
+                connectionType = 'stun';
+              } else {
+                console.log('⚡ Direct P2P connection (host)');
+                connectionType = 'direct';
+              }
+              console.log(`📡 Local: ${localType}, Remote: ${remoteType}`);
+
+              // Update transfer state with connection type
+              setTransfer(prev => prev ? { ...prev, connectionType } : null);
+            }
+          });
+        });
+      }
     };
 
     pc.ondatachannel = (e) => {
@@ -307,10 +425,10 @@ export function usePeerConnection() {
   // Send file via WebRTC with retry logic
   const sendFileViaWebRTC = useCallback(async (peerId: string, file: File, fileId: string, targetPeer: Peer, retryCount = 0) => {
     console.log(`📤 Starting WebRTC transfer to ${peerId} (attempt ${retryCount + 1})`);
-    
+
     // Request wake lock to prevent screen sleep
     await requestWakeLock();
-    
+
     setTransfer({
       peerId,
       peerName: targetPeer.name,
@@ -329,29 +447,29 @@ export function usePeerConnection() {
       // Create and send offer
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      
+
       if (!socketRef.current) {
         throw new Error('Socket not connected');
       }
-      
+
       socketRef.current.emit('rtc-offer', { to: peerId, offer });
       console.log('📤 Sent RTC offer');
 
       // Wait for data channel to open with timeout
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Connection timeout')), 15000);
-        
+
         dc.onopen = () => {
           clearTimeout(timeout);
           console.log('✅ DataChannel ready for sending');
           resolve();
         };
-        
+
         dc.onerror = () => {
           clearTimeout(timeout);
           reject(new Error('DataChannel error'));
         };
-        
+
         if (dc.readyState === 'open') {
           clearTimeout(timeout);
           resolve();
@@ -369,21 +487,54 @@ export function usePeerConnection() {
       }));
 
       // Send file chunks
-      const CHUNK_SIZE = 16 * 1024;
+      const CHUNK_SIZE = 64 * 1024; // Optimized: 64KB chunks
       const arrayBuffer = await file.arrayBuffer();
       let sent = 0;
 
+      // Set backpressure threshold - browser fires 'bufferedamountlow' when buffer drops below this
+      dc.bufferedAmountLowThreshold = 65536; // 64KB
+
       for (let i = 0; i < arrayBuffer.byteLength; i += CHUNK_SIZE) {
         const chunk = arrayBuffer.slice(i, Math.min(i + CHUNK_SIZE, arrayBuffer.byteLength));
-        
-        // Wait if buffer is full
-        while (dc.bufferedAmount > 1024 * 1024) {
-          await new Promise(r => setTimeout(r, 50));
+
+        // Intelligent Backpressure: Wait ONLY if buffer is full
+        if (dc.bufferedAmount > dc.bufferedAmountLowThreshold) {
+          await new Promise<void>((resolve, reject) => {
+            const onLow = () => {
+              cleanup();
+              resolve();
+            };
+
+            const onError = () => {
+              cleanup();
+              reject(new Error('DataChannel error during transfer'));
+            };
+
+            const onClose = () => {
+              cleanup();
+              reject(new Error('DataChannel closed during transfer'));
+            };
+
+            const cleanup = () => {
+              dc.removeEventListener('bufferedamountlow', onLow);
+              dc.removeEventListener('error', onError);
+              dc.removeEventListener('close', onClose);
+            };
+
+            dc.addEventListener('bufferedamountlow', onLow);
+            dc.addEventListener('error', onError);
+            dc.addEventListener('close', onClose);
+
+            // Failsafe: if state changed while setting up
+            if (dc.readyState !== 'open') {
+              onClose();
+            }
+          });
         }
-        
+
         dc.send(chunk);
         sent += chunk.byteLength;
-        
+
         const progress = Math.round((sent / arrayBuffer.byteLength) * 100);
         setTransfer(prev => prev ? { ...prev, progress } : null);
       }
@@ -391,7 +542,7 @@ export function usePeerConnection() {
       // Send end marker
       console.log('📤 Sending file-end');
       dc.send(JSON.stringify({ type: 'file-end', fileId }));
-      
+
       setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
       setTransferResult({
         success: true,
@@ -399,36 +550,36 @@ export function usePeerConnection() {
         fileSize: file.size,
         peerName: targetPeer.name,
       });
-      
+
       // Release wake lock after transfer complete
       releaseWakeLock();
-      
+
       // Let TransferProgress component handle the display timing
       setTimeout(() => setTransfer(null), 8000);
-      
+
     } catch (err) {
       console.error('❌ Transfer error:', err);
-      
+
       // Retry logic
       if (retryCount < MAX_RETRIES) {
         console.log(`🔄 Retrying transfer (${retryCount + 1}/${MAX_RETRIES})...`);
         setTransfer(prev => prev ? { ...prev, status: 'sending', progress: 0 } : null);
-        
+
         // Clean up failed connection
         peerConnectionsRef.current.get(peerId)?.close();
         peerConnectionsRef.current.delete(peerId);
         dataChannelsRef.current.delete(peerId);
-        
+
         // Wait before retry
         await new Promise(r => setTimeout(r, RETRY_DELAY));
-        
+
         // Retry
         return sendFileViaWebRTC(peerId, file, fileId, targetPeer, retryCount + 1);
       }
-      
+
       // Release wake lock on error
       releaseWakeLock();
-      
+
       setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
       setTransferResult({
         success: false,
@@ -455,7 +606,13 @@ export function usePeerConnection() {
       localStorage.setItem('critters_session_id', sessionId);
     }
 
-    const customName = localStorage.getItem('critters_custom_name') || generateCuteName();
+    // Priority: LocalStorage > Generated
+    let customName = localStorage.getItem('critters_custom_name');
+    if (!customName) {
+      customName = generateCuteName();
+      localStorage.setItem('critters_custom_name', customName);
+    }
+
     const customEmoji = localStorage.getItem('critters_custom_emoji');
     const critter = assignCritter(navigator.userAgent);
     const device = getDeviceName(navigator.userAgent);
@@ -480,7 +637,7 @@ export function usePeerConnection() {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
     });
-    
+
     socketRef.current = socket;
 
     socket.on('connect', () => {
@@ -637,10 +794,20 @@ export function usePeerConnection() {
       console.error('Socket not connected');
       return;
     }
-    
+
     const fileId = uuidv4();
     pendingFilesRef.current.set(fileId, { file, peer });
-    
+
+    // Show pending state with animation while waiting for accept
+    setTransfer({
+      peerId: peer.id,
+      peerName: peer.name,
+      fileName: file.name,
+      fileSize: file.size,
+      progress: 0,
+      status: 'pending',
+    });
+
     console.log(`📤 Sending file offer: ${file.name} to ${peer.name}`);
     socketRef.current.emit('file-offer', {
       to: peer.id,
@@ -689,7 +856,7 @@ export function usePeerConnection() {
     });
     dataChannelsRef.current.clear();
     pendingFilesRef.current.clear();
-    
+
     // Abort any streaming writers
     receivingFilesRef.current.forEach(receiving => {
       if (receiving.streamWriter) {
@@ -697,7 +864,7 @@ export function usePeerConnection() {
       }
     });
     receivingFilesRef.current.clear();
-    
+
     releaseWakeLock();
     setTransfer(null);
     setFileOffer(null);

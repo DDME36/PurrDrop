@@ -40,8 +40,29 @@ export function FeedbackModal({ show, onClose }: FeedbackModalProps) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
 
   if (!show) return null;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      if (selectedFile.size > 8 * 1024 * 1024) { // 8MB limit
+        alert('ไฟล์ต้องมีขนาดไม่เกิน 8MB');
+        return;
+      }
+      setFile(selectedFile);
+      const objectUrl = URL.createObjectURL(selectedFile);
+      setPreview(objectUrl);
+    }
+  };
+
+  const clearFile = () => {
+    if (preview) URL.revokeObjectURL(preview); // Cleanup memory
+    setFile(null);
+    setPreview(null);
+  };
 
   const handleSubmit = async () => {
     if (!message.trim() && rating === 0) return;
@@ -50,14 +71,18 @@ export function FeedbackModal({ show, onClose }: FeedbackModalProps) {
     setError(false);
     
     try {
+      const formData = new FormData();
+      formData.append('rating', rating.toString());
+      formData.append('message', message);
+      formData.append('device', navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop');
+      if (file) {
+        formData.append('file', file);
+      }
+
       const res = await fetch('/api/feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rating,
-          message,
-          device: navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop',
-        }),
+        // Content-Type header is explicitly NOT set here, so the browser generates the boundary for multipart/form-data
+        body: formData,
       });
 
       if (!res.ok) throw new Error('Failed');
@@ -68,6 +93,7 @@ export function FeedbackModal({ show, onClose }: FeedbackModalProps) {
         setSent(false);
         setMessage('');
         setRating(0);
+        clearFile();
       }, 2000);
     } catch (err) {
       console.error('Failed to send feedback:', err);
@@ -118,6 +144,27 @@ export function FeedbackModal({ show, onClose }: FeedbackModalProps) {
               onChange={e => setMessage(e.target.value)}
               rows={4}
             />
+
+            <div className="feedback-attachments">
+              {preview ? (
+                <div className="attachment-preview">
+                  <img src={preview} alt="Attached" />
+                  <button className="remove-attachment" onClick={clearFile} title="ลบรูปภาพ">
+                    <XCircleIcon />
+                  </button>
+                </div>
+              ) : (
+                <label className="attachment-btn">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleFileChange} 
+                    hidden 
+                  />
+                  <span>📷 แนบรูปภาพ (สูงสุด 8MB)</span>
+                </label>
+              )}
+            </div>
 
             <div className="modal-actions">
               <button className="btn btn-reject" onClick={onClose}>ยกเลิก</button>

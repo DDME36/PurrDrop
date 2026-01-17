@@ -5,45 +5,45 @@ import { useState, useEffect } from 'react';
 // Lucide Icons
 const GlobeIcon = () => (
   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-pink)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
-    <path d="M2 12h20"/>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+    <path d="M2 12h20" />
   </svg>
 );
 
 const AlertTriangleIcon = () => (
   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/>
-    <path d="M12 9v4"/>
-    <path d="M12 17h.01"/>
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+    <path d="M12 9v4" />
+    <path d="M12 17h.01" />
   </svg>
 );
 
 const CopyIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
-    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
   </svg>
 );
 
 const LightbulbIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
-    <path d="M9 18h6"/>
-    <path d="M10 22h4"/>
+    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+    <path d="M9 18h6" />
+    <path d="M10 22h4" />
   </svg>
 );
 
 const XIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 6 6 18"/>
-    <path d="m6 6 12 12"/>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
   </svg>
 );
 
 const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 6 9 17l-5-5"/>
+    <path d="M20 6 9 17l-5-5" />
   </svg>
 );
 
@@ -54,27 +54,29 @@ export function BrowserWarning() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    setCurrentUrl(window.location.href);
+    // Clean URL (remove query params like fbclid)
+    const cleanUrl = window.location.origin + window.location.pathname;
+    setCurrentUrl(cleanUrl);
 
     // Detect In-App Browser
     const ua = navigator.userAgent || navigator.vendor;
-    
+
     // Check for common In-App browsers
     const isCommonInApp = /FBAN|FBAV|Instagram|Line|Twitter|LinkedIn|Snapchat|Pinterest|TikTok/i.test(ua);
-    
+
     // iOS In-App Browser detection (WebKit without Safari)
     const isIOSWebView = /(iPhone|iPod|iPad).*AppleWebKit(?!.*Safari)/i.test(ua);
-    
+
     // Generic WebView detection
     const isWebView = /wv|WebView/i.test(ua);
-    
+
     // Check referrer for social apps
-    const fromSocialApp = document.referrer && 
-      (document.referrer.includes('instagram') || 
-       document.referrer.includes('facebook') || 
-       document.referrer.includes('line.me') ||
-       document.referrer.includes('twitter') ||
-       document.referrer.includes('tiktok'));
+    const fromSocialApp = document.referrer &&
+      (document.referrer.includes('instagram') ||
+        document.referrer.includes('facebook') ||
+        document.referrer.includes('line.me') ||
+        document.referrer.includes('twitter') ||
+        document.referrer.includes('tiktok'));
 
     const isInAppBrowser = isCommonInApp || isIOSWebView || isWebView || fromSocialApp;
 
@@ -93,7 +95,7 @@ export function BrowserWarning() {
       const channel = new BroadcastChannel('purrdrop_session');
       const sessionId = Date.now().toString();
       let duplicateDetected = false;
-      
+
       const handleMessage = (event: MessageEvent) => {
         if (event.data.type === 'ping' && event.data.id !== sessionId) {
           // Another tab is active - respond

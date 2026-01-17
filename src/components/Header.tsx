@@ -27,7 +27,7 @@ export function Header({ muted, isDark, hasPeers, onToggleMute, onToggleTheme, o
       </div>
       <div className="header-actions">
         {hasPeers && (
-          <button 
+          <button
             className="btn-icon-header"
             onClick={onShowQR}
             title="QR Code"
@@ -43,7 +43,7 @@ export function Header({ muted, isDark, hasPeers, onToggleMute, onToggleTheme, o
             </svg>
           </button>
         )}
-        <button 
+        <button
           className="btn-icon-header"
           onClick={onShowHistory}
           title="ประวัติ"
@@ -53,7 +53,7 @@ export function Header({ muted, isDark, hasPeers, onToggleMute, onToggleTheme, o
             <polyline points="12 6 12 12 16 14"></polyline>
           </svg>
         </button>
-        <button 
+        <button
           className="btn-icon-header"
           onClick={onToggleTheme}
           title={isDark ? 'โหมดสว่าง' : 'โหมดมืด'}
@@ -76,7 +76,7 @@ export function Header({ muted, isDark, hasPeers, onToggleMute, onToggleTheme, o
             </svg>
           )}
         </button>
-        <button 
+        <button
           className={`btn-icon-header ${muted ? 'muted' : ''}`}
           onClick={onToggleMute}
           title="เสียง"

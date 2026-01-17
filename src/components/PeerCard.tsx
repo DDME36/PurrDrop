@@ -3,21 +3,30 @@
 import { Peer } from '@/lib/critters';
 import { useRef } from 'react';
 
+
+
 interface PeerCardProps {
   peer: Peer;
   isNew?: boolean;
   onSelect: (peer: Peer) => void;
-  onDrop: (peer: Peer, files: File[]) => void;
+  onDrop: (peer: Peer, files: FileWithContext[]) => void;
 }
 
+// Max files allowed in single drop
 // Max files allowed in single drop
 const MAX_FILES = 500;
 const MAX_TOTAL_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 
+export interface FileWithContext {
+  file: File;
+  path: string; // e.g. "photos/beach.jpg" or just "beach.jpg"
+}
+
 // Recursively get all files from a directory entry (with limits)
 async function getFilesFromEntry(
-  entry: FileSystemEntry, 
-  files: File[], 
+  entry: FileSystemEntry,
+  path: string,
+  files: FileWithContext[],
   totalSize: { value: number }
 ): Promise<void> {
   // Check limits
@@ -29,7 +38,8 @@ async function getFilesFromEntry(
     return new Promise((resolve) => {
       (entry as FileSystemFileEntry).file((file) => {
         if (files.length < MAX_FILES && totalSize.value + file.size <= MAX_TOTAL_SIZE) {
-          files.push(file);
+          // Use the full recursive path + filename
+          files.push({ file, path: path + file.name });
           totalSize.value += file.size;
         }
         resolve();
@@ -37,7 +47,8 @@ async function getFilesFromEntry(
     });
   } else if (entry.isDirectory) {
     const dirReader = (entry as FileSystemDirectoryEntry).createReader();
-    
+    const currentPath = path + entry.name + '/';
+
     const readBatch = (): Promise<void> => {
       return new Promise((resolve) => {
         dirReader.readEntries(async (entries) => {
@@ -45,12 +56,12 @@ async function getFilesFromEntry(
             resolve();
             return;
           }
-          
+
           for (const e of entries) {
             if (files.length >= MAX_FILES || totalSize.value >= MAX_TOTAL_SIZE) break;
-            await getFilesFromEntry(e, files, totalSize);
+            await getFilesFromEntry(e, currentPath, files, totalSize);
           }
-          
+
           // Continue reading (directories may have batched results)
           if (files.length < MAX_FILES) {
             await readBatch();
@@ -59,17 +70,17 @@ async function getFilesFromEntry(
         }, () => resolve());
       });
     };
-    
+
     await readBatch();
   }
 }
 
 // Get all files from DataTransfer (supports folders, with limits)
-async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<{ files: File[]; limited: boolean }> {
-  const files: File[] = [];
+async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<{ files: FileWithContext[]; limited: boolean }> {
+  const files: FileWithContext[] = [];
   const totalSize = { value: 0 };
   const items = dataTransfer.items;
-  
+
   // Try to use webkitGetAsEntry for folder support
   const entries: FileSystemEntry[] = [];
   for (let i = 0; i < items.length; i++) {
@@ -78,18 +89,22 @@ async function getFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<{ f
       entries.push(entry);
     }
   }
-  
+
   if (entries.length > 0) {
     for (const entry of entries) {
       if (files.length >= MAX_FILES || totalSize.value >= MAX_TOTAL_SIZE) break;
-      await getFilesFromEntry(entry, files, totalSize);
+      // Start with empty path for root items
+      await getFilesFromEntry(entry, '', files, totalSize);
     }
     const limited = files.length >= MAX_FILES || totalSize.value >= MAX_TOTAL_SIZE;
     return { files, limited };
   }
-  
-  // Fallback to regular files
-  const regularFiles = Array.from(dataTransfer.files).slice(0, MAX_FILES);
+
+  // Fallback to regular files (flattened, no folder structure info widely available this way)
+  const regularFiles = Array.from(dataTransfer.files).slice(0, MAX_FILES).map(f => ({
+    file: f,
+    path: f.name // Fallback: just filename
+  }));
   return { files: regularFiles, limited: dataTransfer.files.length > MAX_FILES };
 }
 
@@ -114,7 +129,7 @@ export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
     e.preventDefault();
     e.stopPropagation();
     cardRef.current?.classList.remove('drag-over');
-    
+
     const { files, limited } = await getFilesFromDataTransfer(e.dataTransfer);
     if (files.length > 0) {
       if (limited) {

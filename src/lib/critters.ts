@@ -28,12 +28,22 @@ export interface Peer {
 // Cute random names
 const ADJECTIVES = [
   'Happy', 'Sleepy', 'Bouncy', 'Fluffy', 'Sparkly', 'Dreamy', 'Cozy',
-  'Sunny', 'Lucky', 'Sweet', 'Gentle', 'Snuggly', 'Cheerful', 'Bubbly', 'Peachy'
+  'Sunny', 'Lucky', 'Sweet', 'Gentle', 'Snuggly', 'Cheerful', 'Bubbly', 'Peachy',
+  'Tiny', 'Giant', 'Silky', 'Velvet', 'Shiny', 'Misty', 'Icy', 'Minty',
+  'Spicy', 'Zesty', 'Yummy', 'Tasty', 'Jolly', 'Witty', 'Brave', 'Calm',
+  'Wild', 'Noisy', 'Quiet', 'Busy', 'Lazy', 'Speedy', 'Playful', 'Cuddly',
+  'Fuzzy', 'Wobbly', 'Wiggly', 'Giggly', 'Lovely', 'Dainty', 'Fancy', 'Glitzy',
+  'Funky', 'Groovy', 'Spunky', 'Zany', 'Quirky', 'Magic', 'Mystic', 'Cosmic'
 ];
 
 const NOUNS = [
   'Cloud', 'Star', 'Moon', 'Blossom', 'Pudding', 'Mochi', 'Cookie',
-  'Cupcake', 'Marshmallow', 'Bubble', 'Sprinkle', 'Honey', 'Berry', 'Petal', 'Dewdrop'
+  'Cupcake', 'Marshmallow', 'Bubble', 'Sprinkle', 'Honey', 'Berry', 'Petal', 'Dewdrop',
+  'Muffin', 'Bagel', 'Donut', 'Tart', 'Pie', 'Cake', 'Brownie', 'Fudge',
+  'Candy', 'Toffee', 'Jelly', 'Jam', 'Butter', 'Toast', 'Bread', 'Bun',
+  'Roll', 'Croissant', 'Waffle', 'Pancake', 'Crepe', 'Popcorn', 'Pretzel',
+  'Cracker', 'Biscuit', 'Pebble', 'Sprout', 'Leaf', 'Branch', 'Root', 'Seed',
+  'Nut', 'Shell', 'Pearl', 'Gem', 'Crystal', 'Rainbow', 'Aurora', 'Comet'
 ];
 
 export function generateCuteName(): string {

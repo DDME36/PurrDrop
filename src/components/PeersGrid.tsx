@@ -1,13 +1,13 @@
 'use client';
 
 import { Peer } from '@/lib/critters';
-import { PeerCard } from './PeerCard';
+import { PeerCard, FileWithContext } from './PeerCard';
 
 interface PeersGridProps {
   peers: Peer[];
   newPeerIds: Set<string>;
   onSelectPeer: (peer: Peer) => void;
-  onDropFiles: (peer: Peer, files: File[]) => void;
+  onDropFiles: (peer: Peer, files: FileWithContext[]) => void;
 }
 
 export function PeersGrid({ peers, newPeerIds, onSelectPeer, onDropFiles }: PeersGridProps) {

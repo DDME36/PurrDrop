@@ -82,17 +82,17 @@ export default function Home() {
   // Handle URL params for mode/room on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     // Set base URL (without params)
     const url = new URL(window.location.href);
     url.search = '';
     setBaseUrl(url.toString());
-    
+
     // Check for mode params
     const params = new URLSearchParams(window.location.search);
     const modeParam = params.get('mode');
     const roomParam = params.get('room');
-    
+
     if (modeParam && !initialModeSet && connected) {
       if (modeParam === 'wifi') {
         setMode('wifi');
@@ -102,7 +102,7 @@ export default function Home() {
         toastRef.current?.show(`เข้าห้อง ${roomParam} แล้ว`, 'info');
       }
       setInitialModeSet(true);
-      
+
       // Clean URL params
       window.history.replaceState({}, '', url.toString());
     }
@@ -132,7 +132,7 @@ export default function Home() {
       }
       return;
     }
-    
+
     currentIds.forEach(id => {
       if (!prevPeerIdsRef.current.has(id)) {
         newIds.add(id);
@@ -196,13 +196,19 @@ export default function Home() {
   }, [transferResult, clearTransferResult]);
 
   // Smart ZIP - ฉลาดเลือกว่าจะบีบหรือไม่
+  // Smart ZIP - ฉลาดเลือกว่าจะบีบหรือไม่
   // MAX 100MB สำหรับ ZIP เพื่อป้องกัน RAM เต็ม
   const MAX_ZIP_SIZE = 100 * 1024 * 1024;
-  
-  const createZipFile = useCallback(async (files: File[]): Promise<File | null> => {
+
+  // Import type for use in page (can also define locally if import fails but better to share)
+  // Assuming we can import from PeerCard, but circular deps might be an issue if PeerCard imports peers
+  // Let's redefine locally to be safe or import if clean. 
+  // Given previous steps, let's look at PeerCard.tsx content again. It exports FileWithContext.
+
+  const createZipFile = useCallback(async (filesWithContext: { file: File, path: string }[]): Promise<File | null> => {
     // ตรวจสอบขนาดรวมก่อน
-    const totalSize = files.reduce((acc, f) => acc + f.size, 0);
-    
+    const totalSize = filesWithContext.reduce((acc, item) => acc + item.file.size, 0);
+
     // ถ้าใหญ่เกิน limit ให้ return null (จะส่งทีละไฟล์แทน)
     if (totalSize > MAX_ZIP_SIZE) {
       console.warn(`⚠️ Total size ${(totalSize / 1024 / 1024).toFixed(1)}MB exceeds ZIP limit`);
@@ -223,7 +229,7 @@ export default function Home() {
       // Documents (already compressed)
       'application/pdf',
     ]);
-    
+
     const SKIP_COMPRESS_EXT = new Set([
       '.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.heic',
       '.mp4', '.mkv', '.avi', '.mov', '.webm',
@@ -231,7 +237,7 @@ export default function Home() {
       '.zip', '.rar', '.7z', '.gz', '.bz2', '.xz',
       '.pdf', '.docx', '.xlsx', '.pptx',
     ]);
-    
+
     const shouldCompress = (file: File): boolean => {
       if (SKIP_COMPRESS_TYPES.has(file.type)) return false;
       const ext = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -241,12 +247,12 @@ export default function Home() {
       return true;
     };
 
-    console.log(`📦 Creating ZIP: ${files.length} files, ${(totalSize / 1024 / 1024).toFixed(1)}MB`);
+    console.log(`📦 Creating ZIP: ${filesWithContext.length} files, ${(totalSize / 1024 / 1024).toFixed(1)}MB`);
 
     let zipSize = 22;
     const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number; compressed: boolean }[] = [];
     const encoder = new TextEncoder();
-    
+
     const crc32Table: number[] = [];
     for (let i = 0; i < 256; i++) {
       let c = i;
@@ -255,7 +261,7 @@ export default function Home() {
       }
       crc32Table[i] = c >>> 0;
     }
-    
+
     const calcCrc32 = (data: Uint8Array): number => {
       let crc = 0xFFFFFFFF;
       for (let i = 0; i < data.length; i++) {
@@ -264,14 +270,15 @@ export default function Home() {
       return (crc ^ 0xFFFFFFFF) >>> 0;
     };
 
-    for (const file of files) {
+    for (const { file, path } of filesWithContext) {
       const data = new Uint8Array(await file.arrayBuffer());
-      const name = encoder.encode(file.name);
+      // Use the preserved path name instead of just file.name
+      const name = encoder.encode(path);
       const crc = calcCrc32(data);
       const compress = shouldCompress(file);
-      
-      console.log(`📦 ${file.name}: ${compress ? 'compress' : 'store'} (${file.type || 'unknown'})`);
-      
+
+      console.log(`📦 ${path}: ${compress ? 'compress' : 'store'} (${file.type || 'unknown'})`);
+
       fileInfos.push({ name, data, crc, compressed: compress });
       zipSize += 30 + name.length + data.length;
       zipSize += 46 + name.length;
@@ -343,47 +350,40 @@ export default function Home() {
   }, []);
 
   // Handle multi-file selection
-  const handleMultiFiles = useCallback(async (files: File[], peer: Peer) => {
-    if (files.length === 0) return;
-    
-    // ไฟล์เดียว ส่งตรงๆ
-    if (files.length === 1) {
-      sendFile(peer, files[0]);
-      play('whoosh');
+  const handleMultiFiles = useCallback(async (filesWithContext: { file: File, path: string }[], peer: Peer) => {
+    if (filesWithContext.length === 0) return;
+
+    // ไฟล์เดียว ส่งตรงๆ (เฉพาะถ้าไม่มี path ซับซ้อน หรือมีแค่ชื่อไฟล์)
+    if (filesWithContext.length === 1 && filesWithContext[0].path === filesWithContext[0].file.name) {
+      sendFile(peer, filesWithContext[0].file);
       return;
     }
 
-    // หลายไฟล์ - ลอง ZIP ถ้าขนาดไม่เกิน limit
-    const totalSize = files.reduce((acc, f) => acc + f.size, 0);
-    
-    // ถ้าใหญ่เกิน 100MB ส่งทีละไฟล์แทน
-    if (totalSize > 100 * 1024 * 1024) {
-      toastRef.current?.show(`ไฟล์รวมใหญ่เกิน 100MB - ส่งไฟล์แรก (${files[0].name})`, 'warning');
-      sendFile(peer, files[0]);
-      play('whoosh');
-      return;
-    }
+    // หลายไฟล์ ให้ Zip รวม (Smart Folder: ใช้ path ที่เก็บมา สร้างโครงสร้าง folder ใน zip)
+    toastRef.current?.show('กำลังบีบอัดไฟล์...', 'info');
 
-    toastRef.current?.show(`กำลังรวม ${files.length} ไฟล์เป็น ZIP...`, 'info');
-    
     try {
-      const zipFile = await createZipFile(files);
+      const zipFile = await createZipFile(filesWithContext);
+
       if (zipFile) {
+        // Zip สำเร็จ ส่งไฟล์ Zip
         sendFile(peer, zipFile);
-        play('whoosh');
-        toastRef.current?.show(`ส่ง ${zipFile.name} แล้ว`, 'success');
       } else {
-        // ZIP failed, send first file
-        toastRef.current?.show('สร้าง ZIP ไม่สำเร็จ ส่งไฟล์แรกแทน', 'warning');
-        sendFile(peer, files[0]);
-        play('whoosh');
+        // Zip ไม่ผ่าน (เช่น ใหญ่เกิน 100MB) -> ส่งทีละไฟล์แบบรัวๆ (Queue)
+        toastRef.current?.show(`ไฟล์ใหญ่เกิน 100MB จะทยอยส่งทีละไฟล์ (${filesWithContext.length} ไฟล์)`, 'warning');
+
+        // Simple queue to prevent freezing
+        for (const item of filesWithContext) {
+          await sendFile(peer, item.file);
+          // delay เล็กน้อย
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
-    } catch {
-      toastRef.current?.show('สร้าง ZIP ไม่สำเร็จ ส่งไฟล์แรกแทน', 'warning');
-      sendFile(peer, files[0]);
-      play('whoosh');
+    } catch (err) {
+      console.error('ZIP error:', err);
+      toastRef.current?.show('บีบอัดไฟล์ล้มเหลว', 'error');
     }
-  }, [sendFile, play, createZipFile]);
+  }, [createZipFile, sendFile]);
 
   const handleSelectPeer = useCallback((peer: Peer) => {
     vibrate(15);
@@ -391,18 +391,24 @@ export default function Home() {
     fileInputRef.current?.click();
   }, [vibrate]);
 
-  const handleDropFiles = useCallback((peer: Peer, files: File[]) => {
+  const handleDropFiles = useCallback((peer: Peer, files: { file: File, path: string }[]) => {
     vibrate([20, 50, 20]);
+    // files already contains path context from PeerCard
     handleMultiFiles(files, peer);
   }, [handleMultiFiles, vibrate]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || !selectedPeerRef.current) return;
-    
-    const fileArray = Array.from(files);
-    handleMultiFiles(fileArray, selectedPeerRef.current);
-    e.target.value = '';
+    if (e.target.files && e.target.files.length > 0 && selectedPeerRef.current) {
+      const filesArr = Array.from(e.target.files);
+      // For input selection, we don't have detailed path info, so use filename as path
+      const filesWithContext = filesArr.map(f => ({ file: f, path: f.name }));
+
+      handleMultiFiles(filesWithContext, selectedPeerRef.current);
+    }
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   }, [handleMultiFiles]);
 
   const handleAcceptFile = useCallback(() => {
@@ -440,11 +446,11 @@ export default function Home() {
       <div id="toastContainer" />
 
       <div className="app">
-        <Header 
-          muted={muted} 
+        <Header
+          muted={muted}
           isDark={isDark}
           hasPeers={peers.length > 0}
-          onToggleMute={toggleMute} 
+          onToggleMute={toggleMute}
           onToggleTheme={toggleTheme}
           onShowHistory={() => setShowHistoryModal(true)}
           onShowQR={() => setShowQRModal(true)}
@@ -491,6 +497,7 @@ export default function Home() {
             status={transfer.status}
             emoji={myPeer?.critter.emoji || '🐱'}
             peerName={transfer.peerName}
+            connectionType={transfer.connectionType}
             onCancel={cancelTransfer}
           />
         )}

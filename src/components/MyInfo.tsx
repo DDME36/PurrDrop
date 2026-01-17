@@ -21,21 +21,25 @@ const statusText: Record<ConnectionStatus, string> = {
 
 export function MyInfo({ peer, connected, connectionStatus, onEditName, onEditEmoji }: MyInfoProps) {
   const { isDark } = useTheme();
-  
-  const avatarGradient = peer 
-    ? isDark 
-      ? peer.critter.color 
+
+  const avatarGradient = peer
+    ? isDark
+      ? peer.critter.color
       : `linear-gradient(135deg, ${peer.critter.color}, #fff)`
     : undefined;
 
   return (
     <div className={`my-critter-bar ${!connected ? 'offline' : ''}`}>
-      <div 
+      <div
         className="my-critter-avatar"
         style={{ background: avatarGradient }}
         onClick={onEditEmoji}
       >
-        {peer?.critter.emoji || '🐱'}
+        <div className="emoji-breathe-wrapper">
+          <div className="emoji-hover-target">
+            {peer?.critter.emoji || '🐱'}
+          </div>
+        </div>
       </div>
       <div className="my-critter-info">
         <div className="my-critter-name" onClick={onEditName}>

@@ -6,9 +6,10 @@ interface TransferProgressProps {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: 'sending' | 'receiving' | 'complete' | 'error';
+  status: 'pending' | 'sending' | 'receiving' | 'complete' | 'error';
   emoji: string;
   peerName: string;
+  connectionType?: 'direct' | 'stun' | 'relay';
   onComplete?: () => void;
   onCancel?: () => void;
 }
@@ -29,7 +30,7 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')} นาที`;
 }
 
-export function TransferProgress({ fileName, fileSize, progress, status, emoji, peerName, onComplete, onCancel }: TransferProgressProps) {
+export function TransferProgress({ fileName, fileSize, progress, status, emoji, peerName, connectionType, onComplete, onCancel }: TransferProgressProps) {
   const [speed, setSpeed] = useState(0);
   const [eta, setEta] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(0);
@@ -85,7 +86,7 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
     if (showSuccess && !isClosing) {
       const closeTimer = setTimeout(() => {
         setIsClosing(true);
-        
+
         // Wait for close animation to finish
         setTimeout(() => {
           setIsVisible(false);
@@ -106,18 +107,18 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
 
     if (timeDiff > 0.1 && bytesDiff > 0) {
       const currentSpeed = bytesDiff / timeDiff;
-      
+
       speedHistoryRef.current.push(currentSpeed);
       if (speedHistoryRef.current.length > 5) {
         speedHistoryRef.current.shift();
       }
       const avgSpeed = speedHistoryRef.current.reduce((a, b) => a + b, 0) / speedHistoryRef.current.length;
-      
+
       setSpeed(avgSpeed);
-      
+
       const remaining = fileSize - currentBytes;
       setEta(remaining / avgSpeed);
-      
+
       lastUpdateRef.current = { time: now, bytes: currentBytes };
     }
   }, [progress, fileSize]);
@@ -139,6 +140,7 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
   if (!isVisible) return null;
 
   const statusConfig = {
+    pending: { text: 'รอการยืนยัน...', icon: 'waiting', color: 'var(--accent-lavender)' },
     sending: { text: 'กำลังส่ง', icon: 'upload', color: 'var(--accent-mint)' },
     receiving: { text: 'กำลังรับ', icon: 'download', color: 'var(--accent-peach)' },
     complete: { text: 'เสร็จแล้ว!', icon: 'check', color: 'var(--accent-mint)' },
@@ -146,39 +148,50 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
   };
 
   const config = statusConfig[status];
-  const isActive = status === 'sending' || status === 'receiving';
+  const isActive = status === 'pending' || status === 'sending' || status === 'receiving';
+  const isPending = status === 'pending';
 
   // Status icons as SVG
   const StatusIcon = () => {
+    if (config.icon === 'waiting') {
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon-waiting">
+          <path d="M5 22h14" />
+          <path d="M5 2h14" />
+          <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" />
+          <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
+        </svg>
+      );
+    }
     if (config.icon === 'upload') {
       return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 17V3"/>
-          <path d="m6 8 6-6 6 6"/>
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <path d="M12 17V3" />
+          <path d="m6 8 6-6 6 6" />
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
         </svg>
       );
     }
     if (config.icon === 'download') {
       return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 15V3"/>
-          <path d="m7 10 5 5 5-5"/>
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <path d="M12 15V3" />
+          <path d="m7 10 5 5 5-5" />
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
         </svg>
       );
     }
     if (config.icon === 'check') {
       return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6 9 17l-5-5"/>
+          <path d="M20 6 9 17l-5-5" />
         </svg>
       );
     }
     return (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 6 6 18"/>
-        <path d="m6 6 12 12"/>
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
       </svg>
     );
   };
@@ -220,20 +233,63 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
                 <span className="transfer-status-text" style={{ color: config.color }}>{config.text}</span>
               </div>
 
+              {/* E2E Encryption Indicator */}
+              <div className="transfer-badges">
+                <div className="transfer-e2e-badge">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <span>E2E</span>
+                </div>
+
+                {/* Connection Type Badge */}
+                {connectionType && (
+                  <div className={`transfer-connection-badge ${connectionType}`}>
+                    {connectionType === 'direct' && (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                        </svg>
+                        <span>Direct</span>
+                      </>
+                    )}
+                    {connectionType === 'stun' && (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M12 16v-4" />
+                          <path d="M12 8h.01" />
+                        </svg>
+                        <span>STUN</span>
+                      </>
+                    )}
+                    {connectionType === 'relay' && (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3Z" />
+                        </svg>
+                        <span>Relay</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="transfer-filename">{fileName}</div>
 
               <div className="transfer-progress-container">
                 <div className="transfer-progress-track">
-                  <div 
+                  <div
                     className="transfer-progress-fill"
-                    style={{ 
+                    style={{
                       width: `${displayProgress}%`,
                       background: `linear-gradient(90deg, ${config.color}, var(--accent-pink))`,
                     }}
                   />
                   <div className="transfer-progress-percent">{Math.round(displayProgress)}%</div>
                   {isActive && (
-                    <div 
+                    <div
                       className="transfer-progress-glow"
                       style={{ left: `${displayProgress}%` }}
                     />
@@ -246,8 +302,8 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
                   <div className="transfer-stat">
                     <span className="stat-icon">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 3v16a2 2 0 0 0 2 2h16"/>
-                        <path d="m19 9-5 5-4-4-3 3"/>
+                        <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+                        <path d="m19 9-5 5-4-4-3 3" />
                       </svg>
                     </span>
                     <span>{formatBytes((progress / 100) * fileSize)} / {formatBytes(fileSize)}</span>
@@ -255,7 +311,7 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
                   <div className="transfer-stat">
                     <span className="stat-icon">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+                        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
                       </svg>
                     </span>
                     <span>{formatBytes(speed)}/s</span>
@@ -263,8 +319,8 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
                   <div className="transfer-stat">
                     <span className="stat-icon">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <polyline points="12 6 12 12 16 14"/>
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
                       </svg>
                     </span>
                     <span>{formatTime(eta)}</span>
@@ -287,9 +343,10 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
                 </div>
               )}
             </>
-          )}
-        </div>
-      </div>
-    </div>
+          )
+          }
+        </div >
+      </div >
+    </div >
   );
 }
