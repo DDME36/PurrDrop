@@ -3,6 +3,7 @@ import { parse } from 'url';
 import next from 'next';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { createHash } from 'crypto';
+import { validatePeerData, sanitizeName, validateRoomCode, sanitizePassword } from './src/lib/sanitize';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
@@ -255,8 +256,11 @@ app.prepare().then(() => {
 
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: '*',
+      origin: process.env.NODE_ENV === 'production' 
+        ? (process.env.ALLOWED_ORIGINS?.split(',') || false)
+        : '*',
       methods: ['GET', 'POST'],
+      credentials: true,
     },
     transports: ['websocket', 'polling'],
   });
@@ -267,19 +271,21 @@ app.prepare().then(() => {
 
     socket.on('join', (peerData: PeerData) => {
       try {
-        if (!peerData || !peerData.id || !peerData.name) {
+        // Validate and sanitize peer data
+        const validated = validatePeerData(peerData);
+        if (!validated) {
           console.error('Invalid peer data received');
           return;
         }
 
-        const existingPeer = peers.get(peerData.id);
+        const existingPeer = peers.get(validated.id);
         
         if (existingPeer) {
           // Same user, new tab or reconnect
           existingPeer.sockets.add(socket.id);
-          existingPeer.name = peerData.name;
-          existingPeer.critter = peerData.critter;
-          console.log(`Peer reconnected: ${peerData.name} (${peerData.id}) IP: ${clientIP}`);
+          existingPeer.name = validated.name;
+          existingPeer.critter = validated.critter;
+          console.log(`Peer reconnected: ${validated.name} (${validated.id}) IP: ${clientIP}`);
           
           // Send current mode info to new tab
           emitToPeer(io, existingPeer, 'mode-info', { 
@@ -298,7 +304,7 @@ app.prepare().then(() => {
           // New user - default to public mode
           const networkName = getNetworkName(clientIP);
           const peer: Peer = {
-            ...peerData,
+            ...validated,
             sockets: new Set([socket.id]),
             publicIP: clientIP,
             networkName,
@@ -360,13 +366,17 @@ app.prepare().then(() => {
         peer.mode = mode;
         
         if (mode === 'private') {
+          // Validate and sanitize room code and password
+          const validatedCode = roomCode ? validateRoomCode(roomCode) : null;
+          const sanitizedPassword = password ? sanitizePassword(password) : null;
+          
           // Joining existing room with code
-          if (roomCode && /^\d{5}$/.test(roomCode)) {
-            const existingRoom = rooms.get(roomCode);
+          if (validatedCode) {
+            const existingRoom = rooms.get(validatedCode);
             
             // ถ้าไม่มีห้องนี้ → แจ้ง error
             if (!existingRoom) {
-              console.log(`${peer.name} tried to join non-existent room ${roomCode}`);
+              console.log(`${peer.name} tried to join non-existent room ${validatedCode}`);
               emitToPeer(io, peer, 'room-error', { 
                 error: 'room-not-found',
                 message: 'ไม่พบห้องนี้'
@@ -387,9 +397,9 @@ app.prepare().then(() => {
             
             // Check password if room has password
             if (existingRoom.password) {
-              if (password !== existingRoom.password) {
+              if (sanitizedPassword !== existingRoom.password) {
                 // Wrong password
-                console.log(`${peer.name} failed to join room ${roomCode} - wrong password`);
+                console.log(`${peer.name} failed to join room ${validatedCode} - wrong password`);
                 emitToPeer(io, peer, 'room-error', { 
                   error: 'wrong-password',
                   message: 'รหัสผ่านไม่ถูกต้อง'
@@ -408,6 +418,26 @@ app.prepare().then(() => {
                 return;
               }
             }
+            
+            // Join existing room
+            peer.roomCode = validatedCode;
+            peer.roomPassword = existingRoom.password || null;
+            existingRoom.peerIds.add(peer.id);
+            
+            console.log(`${peer.name} joined room ${validatedCode}${peer.roomPassword ? ' (password protected)' : ''}`);
+          } else {
+            // Create new room (no code provided = generate new)
+            const code = generateRoomCode();
+            peer.roomCode = code;
+            peer.roomPassword = sanitizedPassword;
+            
+            rooms.set(code, { 
+              peerIds: new Set([peer.id]), 
+              password: sanitizedPassword
+            });
+            
+            console.log(`${peer.name} created room ${code}${sanitizedPassword ? ' (password protected)' : ''}`);
+          }
             
             // Join existing room
             peer.roomCode = roomCode;
@@ -451,7 +481,7 @@ app.prepare().then(() => {
     socket.on('update-name', ({ name }) => {
       const peer = getPeerBySocketId(socket.id);
       if (peer) {
-        peer.name = name;
+        peer.name = sanitizeName(name);
         // Delta update - notify only peers who can see this peer
         notifyPeerUpdated(io, peer);
       }
@@ -459,8 +489,9 @@ app.prepare().then(() => {
 
     socket.on('update-emoji', ({ emoji }) => {
       const peer = getPeerBySocketId(socket.id);
-      if (peer) {
-        peer.critter.emoji = emoji;
+      if (peer && typeof emoji === 'string') {
+        // Limit emoji length and sanitize
+        peer.critter.emoji = emoji.slice(0, 10);
         // Delta update - notify only peers who can see this peer
         notifyPeerUpdated(io, peer);
       }

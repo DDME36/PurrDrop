@@ -37,41 +37,6 @@ export interface PeerWithMeta extends Peer {
   inRoom?: boolean;
 }
 
-// ICE Servers - STUN + Free TURN (OpenRelay by Metered)
-// TURN servers help connect users behind strict NAT/firewalls
-const ICE_SERVERS: RTCIceServer[] = [
-  // Google STUN servers (fast, reliable)
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-
-  // OpenRelay Free TURN servers (no signup required)
-  // These help when direct P2P connection fails
-  {
-    urls: 'stun:stun.relay.metered.ca:80',
-  },
-  {
-    urls: 'turn:global.relay.metered.ca:80',
-    username: 'e7b4c5a0d1f2e3b4c5a6',
-    credential: 'zXcVbNmLkJhGfDsA',
-  },
-  {
-    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-    username: 'e7b4c5a0d1f2e3b4c5a6',
-    credential: 'zXcVbNmLkJhGfDsA',
-  },
-  {
-    urls: 'turn:global.relay.metered.ca:443',
-    username: 'e7b4c5a0d1f2e3b4c5a6',
-    credential: 'zXcVbNmLkJhGfDsA',
-  },
-  {
-    urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-    username: 'e7b4c5a0d1f2e3b4c5a6',
-    credential: 'zXcVbNmLkJhGfDsA',
-  },
-];
-
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 500; // Reduced to 500ms for smoother recovery
 
@@ -103,6 +68,7 @@ export function usePeerConnection() {
   const myPeerRef = useRef<Peer | null>(null);
   const peersRef = useRef<PeerWithMeta[]>([]);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const iceServersRef = useRef<RTCIceServer[]>([]);
 
   // Wake Lock - prevent screen from sleeping during transfer
   const requestWakeLock = useCallback(async () => {
@@ -366,7 +332,10 @@ export function usePeerConnection() {
     }
 
     const pc = new RTCPeerConnection({
-      iceServers: ICE_SERVERS,
+      iceServers: iceServersRef.current.length > 0 ? iceServersRef.current : [
+        // Fallback STUN servers if API fails
+        { urls: 'stun:stun.l.google.com:19302' },
+      ],
       iceCandidatePoolSize: 10, // Pre-fetch candidates for faster connection
     });
 
@@ -599,6 +568,18 @@ export function usePeerConnection() {
       setConnectionStatus('disconnected');
       return;
     }
+
+    // Fetch ICE servers from API
+    fetch('/api/ice-servers')
+      .then(res => res.json())
+      .then(data => {
+        iceServersRef.current = data.iceServers;
+        console.log('✅ ICE servers loaded from API');
+      })
+      .catch(err => {
+        console.error('❌ Failed to load ICE servers:', err);
+        // Fallback STUN servers already set in createPeerConnection
+      });
 
     let sessionId = localStorage.getItem('critters_session_id');
     if (!sessionId) {
