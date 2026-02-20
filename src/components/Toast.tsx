@@ -52,7 +52,7 @@ export const Toast = forwardRef<ToastRef>(function Toast(_, ref) {
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000);
+    }, 5000);
   }, []);
 
   useImperativeHandle(ref, () => ({ show }));

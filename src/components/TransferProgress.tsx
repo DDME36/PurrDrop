@@ -6,7 +6,7 @@ interface TransferProgressProps {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: 'pending' | 'sending' | 'receiving' | 'complete' | 'error';
+  status: 'pending' | 'sending' | 'receiving' | 'complete' | 'saving' | 'error';
   emoji: string;
   peerName: string;
   connectionType?: 'direct' | 'stun' | 'relay';
@@ -150,12 +150,13 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
     pending: { text: 'รอการยืนยัน...', icon: 'waiting', color: 'var(--accent-lavender)' },
     sending: { text: 'กำลังส่ง', icon: 'upload', color: 'var(--accent-mint)' },
     receiving: { text: 'กำลังรับ', icon: 'download', color: 'var(--accent-peach)' },
+    saving: { text: 'รอบันทึกไฟล์...', icon: 'save', color: 'var(--accent-lavender)' },
     complete: { text: 'เสร็จแล้ว!', icon: 'check', color: 'var(--accent-mint)' },
     error: { text: 'ผิดพลาด', icon: 'x', color: '#ff6b6b' },
   };
 
   const config = statusConfig[status];
-  const isActive = status === 'pending' || status === 'sending' || status === 'receiving';
+  const isActive = status === 'pending' || status === 'sending' || status === 'receiving' || status === 'saving';
 
   let iconSvg = null;
   if (config.icon === 'waiting') {
@@ -181,6 +182,14 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
         <path d="M12 15V3" />
         <path d="m7 10 5 5 5-5" />
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      </svg>
+    );
+  } else if (config.icon === 'save') {
+    iconSvg = (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon-waiting">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+        <polyline points="17 21 17 13 7 13 7 21" />
+        <polyline points="7 3 7 8 15 8" />
       </svg>
     );
   } else if (config.icon === 'check') {

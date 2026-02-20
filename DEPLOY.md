@@ -2,7 +2,7 @@
 
 ## 📋 สิ่งที่ต้องมี
 
-- Node.js 18+
+- Bun 1.0+ (หรือ Node.js 18+ ถ้าไม่ใช้ Bun)
 - Git
 - บัญชี GitHub
 
@@ -51,11 +51,20 @@ git push -u origin main
    - Environment: `Node`
    - Build Command: `bun install && bun run build`
    - Start Command: `bun run start`
-   - **Environment Variables**:
+   - **Environment Variables** (สำคัญ!):
      - `BUN_VERSION`: `1.2.2` (หรือเวอร์ชันล่าสุด)
+     - `NEXT_TELEMETRY_DISABLED`: `1` (ประหยัด RAM และเวลา Build)
 4. เลือก **Free** tier
 
-**ข้อดี:** เซิร์ฟเวอร์ตื่นเร็วมากเมื่อใช้ Bun แทน Node.js ทั่วไป (แก้ปัญหา Cold start ของโฮสต์ฟรี)
+**ข้อดี:** 
+- เซิร์ฟเวอร์ตื่นเร็วมากเมื่อใช้ Bun แทน Node.js ทั่วไป (แก้ปัญหา Cold start ของโฮสต์ฟรี)
+- มี Error Boundary และ Offline Detection ในตัว
+- รองรับ SEO และ Social Media Cards
+
+**Tips สำหรับ Render Free Tier:**
+- ตั้ง `NEXT_TELEMETRY_DISABLED=1` เพื่อลด memory usage
+- Server จะ sleep หลัง 15 นาทีไม่มีคนใช้ (ตื่นใช้เวลา ~30 วินาที)
+- ใช้ Bun แทน Node.js จะเร็วกว่ามาก
 
 ### Option C: VPS / Self-hosted
 
@@ -71,7 +80,7 @@ bun install
 bun run build
 
 # Run with PM2 (production)
-npm install -g pm2
+bun add -g pm2
 pm2 start "bun run start" --name "purrdrop"
 
 # หรือรันตรงๆ
@@ -120,10 +129,20 @@ http://192.168.x.x:3000
 
 ## 🔧 Environment Variables (Optional)
 
-| Variable   | Default     | Description              |
-| ---------- | ----------- | ------------------------ |
-| `PORT`     | 3000        | Port ที่ server รัน      |
-| `NODE_ENV` | development | production สำหรับ deploy |
+| Variable                   | Default     | Description                                    |
+| -------------------------- | ----------- | ---------------------------------------------- |
+| `PORT`                     | 3000        | Port ที่ server รัน                            |
+| `NODE_ENV`                 | development | production สำหรับ deploy                       |
+| `NEXT_TELEMETRY_DISABLED`  | 0           | ตั้งเป็น 1 เพื่อประหยัด RAM (แนะนำสำหรับ Free Tier) |
+| `ALLOWED_ORIGINS`          | -           | CORS origins (comma-separated)                 |
+| `TURN_USERNAME`            | -           | TURN server username (optional)                |
+| `TURN_CREDENTIAL`          | -           | TURN server credential (optional)              |
+
+**สำหรับ Render Free Tier แนะนำให้ตั้ง:**
+```
+NEXT_TELEMETRY_DISABLED=1
+BUN_VERSION=1.2.2
+```
 
 ---
 
@@ -146,12 +165,14 @@ http://192.168.x.x:3000
 
 - เช็คว่า push โค้ดขึ้น GitHub ครบ
 - ดู logs ใน dashboard
+- ตรวจสอบว่าตั้ง `BUN_VERSION` และ `NEXT_TELEMETRY_DISABLED` แล้ว
 
 ### เชื่อมต่อไม่ได้?
 
 - ตรวจสอบว่าอุปกรณ์ทั้งสองเปิด URL เดียวกัน
 - ลอง refresh หน้าเว็บ
 - ตรวจสอบว่าอยู่ใน network เดียวกัน
+- ดูที่ offline banner ด้านบนว่าเน็ตหลุดหรือไม่
 
 ### ส่งไฟล์ไม่ได้?
 
@@ -163,6 +184,18 @@ http://192.168.x.x:3000
 
 - ลอง hard refresh (Ctrl+Shift+R)
 - เคลียร์ cache ของ browser
+
+### หน้าเว็บ Crash (White Screen)?
+
+- โปรเจคมี Error Boundary ในตัวแล้ว จะแสดงหน้า Error น่ารักๆ
+- ถ้ายังเป็น ลอง hard refresh หรือเคลียร์ cache
+- เช็ค Console สำหรับ error details
+
+### Server Sleep (Render Free Tier)?
+
+- Server จะ sleep หลัง 15 นาทีไม่มีคนใช้
+- ตื่นใช้เวลา ~30 วินาที (Bun เร็วกว่า Node.js มาก)
+- ถ้าต้องการ uptime 100% ใช้ paid plan หรือ cron job ping
 
 ---
 

@@ -1,10 +1,168 @@
-// File Compression - บีบอัดไฟล์ก่อนส่ง
-// ใช้ CompressionStream API (supported in modern browsers)
+// File Compression & ZIP utilities
 
+export interface FileWithContext {
+  file: File;
+  path: string;
+}
+
+// Max 100MB for ZIP to prevent RAM issues
+const MAX_ZIP_SIZE = 100 * 1024 * 1024;
+
+// File types that are already compressed (no benefit from ZIP compression)
+const SKIP_COMPRESS_TYPES = new Set([
+  // Images
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
+  // Video
+  'video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska',
+  // Audio
+  'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm', 'audio/aac',
+  // Archives
+  'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
+  'application/gzip', 'application/x-bzip2',
+  // Documents
+  'application/pdf',
+]);
+
+const SKIP_COMPRESS_EXT = new Set([
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.heic',
+  '.mp4', '.mkv', '.avi', '.mov', '.webm',
+  '.mp3', '.aac', '.ogg', '.m4a', '.flac',
+  '.zip', '.rar', '.7z', '.gz', '.bz2', '.xz',
+  '.pdf', '.docx', '.xlsx', '.pptx',
+]);
+
+function shouldCompressFile(file: File): boolean {
+  if (SKIP_COMPRESS_TYPES.has(file.type)) return false;
+  const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+  if (SKIP_COMPRESS_EXT.has(ext)) return false;
+  // Don't compress files > 50MB (prevent CPU hang)
+  if (file.size > 50 * 1024 * 1024) return false;
+  return true;
+}
+
+// CRC32 lookup table
+const crc32Table: number[] = (() => {
+  const table: number[] = [];
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) {
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function calcCrc32(data: Uint8Array): number {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc = (crc >>> 8) ^ crc32Table[(crc ^ data[i]) & 0xFF];
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+/**
+ * Create a ZIP file from multiple files with folder structure
+ * Returns null if total size exceeds MAX_ZIP_SIZE
+ */
+export async function createZipFile(filesWithContext: FileWithContext[]): Promise<File | null> {
+  const totalSize = filesWithContext.reduce((acc, item) => acc + item.file.size, 0);
+
+  // Return null if too large (caller should send files individually)
+  if (totalSize > MAX_ZIP_SIZE) {
+    console.warn(`⚠️ Total size ${(totalSize / 1024 / 1024).toFixed(1)}MB exceeds ZIP limit`);
+    return null;
+  }
+
+  console.log(`📦 Creating ZIP: ${filesWithContext.length} files, ${(totalSize / 1024 / 1024).toFixed(1)}MB`);
+
+  let zipSize = 22; // End of central directory record
+  const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number; compressed: boolean }[] = [];
+  const encoder = new TextEncoder();
+
+  // Process each file
+  for (const { file, path } of filesWithContext) {
+    const data = new Uint8Array(await file.arrayBuffer());
+    const name = encoder.encode(path);
+    const crc = calcCrc32(data);
+    const compress = shouldCompressFile(file);
+
+    console.log(`📦 ${path}: ${compress ? 'compress' : 'store'} (${file.type || 'unknown'})`);
+
+    fileInfos.push({ name, data, crc, compressed: compress });
+    zipSize += 30 + name.length + data.length; // Local file header + data
+    zipSize += 46 + name.length; // Central directory entry
+  }
+
+  // Create ZIP buffer
+  const buffer = new ArrayBuffer(zipSize);
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  let pos = 0;
+
+  // Write local file headers + data
+  for (const { name, data, crc } of fileInfos) {
+    view.setUint32(pos, 0x04034b50, true); pos += 4; // Local file header signature
+    view.setUint16(pos, 20, true); pos += 2; // Version needed
+    view.setUint16(pos, 0, true); pos += 2; // Flags
+    view.setUint16(pos, 0, true); pos += 2; // Compression method (0 = store)
+    view.setUint16(pos, 0, true); pos += 2; // Mod time
+    view.setUint16(pos, 0, true); pos += 2; // Mod date
+    view.setUint32(pos, crc, true); pos += 4; // CRC-32
+    view.setUint32(pos, data.length, true); pos += 4; // Compressed size
+    view.setUint32(pos, data.length, true); pos += 4; // Uncompressed size
+    view.setUint16(pos, name.length, true); pos += 2; // Filename length
+    view.setUint16(pos, 0, true); pos += 2; // Extra field length
+    bytes.set(name, pos); pos += name.length; // Filename
+    bytes.set(data, pos); pos += data.length; // File data
+  }
+
+  const cdStart = pos;
+
+  // Write central directory
+  let localOffset = 0;
+  for (const { name, data, crc } of fileInfos) {
+    view.setUint32(pos, 0x02014b50, true); pos += 4; // Central directory signature
+    view.setUint16(pos, 20, true); pos += 2; // Version made by
+    view.setUint16(pos, 20, true); pos += 2; // Version needed
+    view.setUint16(pos, 0, true); pos += 2; // Flags
+    view.setUint16(pos, 0, true); pos += 2; // Compression method
+    view.setUint16(pos, 0, true); pos += 2; // Mod time
+    view.setUint16(pos, 0, true); pos += 2; // Mod date
+    view.setUint32(pos, crc, true); pos += 4; // CRC-32
+    view.setUint32(pos, data.length, true); pos += 4; // Compressed size
+    view.setUint32(pos, data.length, true); pos += 4; // Uncompressed size
+    view.setUint16(pos, name.length, true); pos += 2; // Filename length
+    view.setUint16(pos, 0, true); pos += 2; // Extra field length
+    view.setUint16(pos, 0, true); pos += 2; // Comment length
+    view.setUint16(pos, 0, true); pos += 2; // Disk number
+    view.setUint16(pos, 0, true); pos += 2; // Internal attributes
+    view.setUint32(pos, 0, true); pos += 4; // External attributes
+    view.setUint32(pos, localOffset, true); pos += 4; // Local header offset
+    bytes.set(name, pos); pos += name.length; // Filename
+    localOffset += 30 + name.length + data.length;
+  }
+
+  const cdSize = pos - cdStart;
+
+  // Write end of central directory
+  view.setUint32(pos, 0x06054b50, true); pos += 4; // EOCD signature
+  view.setUint16(pos, 0, true); pos += 2; // Disk number
+  view.setUint16(pos, 0, true); pos += 2; // Disk with central directory
+  view.setUint16(pos, fileInfos.length, true); pos += 2; // Entries on this disk
+  view.setUint16(pos, fileInfos.length, true); pos += 2; // Total entries
+  view.setUint32(pos, cdSize, true); pos += 4; // Central directory size
+  view.setUint32(pos, cdStart, true); pos += 4; // Central directory offset
+  view.setUint16(pos, 0, true); // Comment length
+
+  const timestamp = new Date().toISOString().slice(0, 10);
+  return new File([buffer], `PurrDrop_${timestamp}.zip`, { type: 'application/zip' });
+}
+
+// Legacy compression functions (kept for compatibility)
 export async function compressData(data: ArrayBuffer): Promise<ArrayBuffer> {
-  // Check if CompressionStream is supported
   if (typeof CompressionStream === 'undefined') {
-    return data; // Return original if not supported
+    return data;
   }
 
   try {
@@ -33,7 +191,6 @@ export async function compressData(data: ArrayBuffer): Promise<ArrayBuffer> {
       offset += chunk.length;
     }
 
-    // Only use compressed if it's actually smaller
     if (result.buffer.byteLength < data.byteLength * 0.9) {
       return result.buffer;
     }
@@ -80,9 +237,7 @@ export async function decompressData(data: ArrayBuffer): Promise<ArrayBuffer> {
   }
 }
 
-// Check if compression is worth it for this file type
 export function shouldCompress(mimeType: string): boolean {
-  // Already compressed formats
   const compressedTypes = [
     'image/jpeg', 'image/png', 'image/gif', 'image/webp',
     'video/', 'audio/',

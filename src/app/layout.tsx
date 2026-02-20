@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'PurrDrop - Send Files with Love',
-  description: 'ส่งไฟล์ง่ายๆ ระหว่างอุปกรณ์ในเครือข่ายเดียวกัน',
+  description: 'ส่งไฟล์ง่ายๆ ระหว่างอุปกรณ์ในเครือข่ายเดียวกัน ไม่ต้องลงแอป ส่งตรง P2P ปลอดภัย',
   manifest: '/manifest.json',
   icons: {
     icon: '/favicon.ico',
@@ -13,6 +13,51 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'default',
     title: 'PurrDrop',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'th_TH',
+    url: 'https://purrdrop.onrender.com',
+    siteName: 'PurrDrop',
+    title: 'PurrDrop - Send Files with Love 🐱',
+    description: 'ส่งไฟล์ง่ายๆ ระหว่างอุปกรณ์ในเครือข่ายเดียวกัน ไม่ต้องลงแอป ส่งตรง P2P ปลอดภัย',
+    images: [
+      {
+        url: '/icon-512.png',
+        width: 512,
+        height: 512,
+        alt: 'PurrDrop Logo',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'PurrDrop - Send Files with Love 🐱',
+    description: 'ส่งไฟล์ง่ายๆ ระหว่างอุปกรณ์ในเครือข่ายเดียวกัน ไม่ต้องลงแอป ส่งตรง P2P ปลอดภัย',
+    images: ['/icon-512.png'],
+    creator: '@ddme36',
+  },
+  keywords: [
+    'file transfer',
+    'P2P',
+    'WebRTC',
+    'ส่งไฟล์',
+    'แชร์ไฟล์',
+    'file sharing',
+    'local network',
+    'no app required',
+    'secure transfer',
+  ],
+  authors: [{ name: 'DDME36 (Dome)', url: 'https://github.com/DDME36' }],
+  creator: 'DDME36',
+  publisher: 'DDME36',
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
   },
 };
 

@@ -1,4 +1,4 @@
-// Transfer History - เก็บประวัติการส่ง/รับไฟล์
+// Transfer History - เก็บประวัติการส่ง/รับไฟล์และข้อความ
 export interface TransferRecord {
   id: string;
   fileName: string;
@@ -7,6 +7,8 @@ export interface TransferRecord {
   direction: 'sent' | 'received';
   timestamp: number;
   success: boolean;
+  type?: 'file' | 'text'; // เพิ่มประเภท
+  textContent?: string; // เก็บข้อความ
 }
 
 const STORAGE_KEY = 'purrdrop_history';

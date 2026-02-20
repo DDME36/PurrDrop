@@ -14,13 +14,18 @@
 |---------|-------------|
 | 🔗 **WebRTC P2P** | ไฟล์ส่งตรงระหว่าง Browser ไม่ผ่าน Server |
 | 📦 **ไม่จำกัดขนาด** | ส่งไฟล์ใหญ่ได้ รองรับ Streaming สำหรับไฟล์ GB |
+| 💬 **ส่งข้อความ/ลิงก์** | ส่งข้อความและ URL ได้ พร้อมเก็บประวัติและคัดลอก |
 | 🐱 **Cute Characters** | สัตว์น่ารักตาม OS (แก้ไขได้) |
 | 🎨 **Dark/Light Mode** | สลับธีมได้ตามใจชอบ |
 | 📱 **PWA Support** | ติดตั้งเป็น App บนมือถือได้ |
 | 🔔 **Push Notifications** | แจ้งเตือนเมื่อมีไฟล์เข้า |
-| 📋 **Transfer History** | เก็บประวัติการส่ง 50 รายการ |
-| 🗜️ **Smart ZIP** | รวมหลายไฟล์เป็น ZIP อัตโนมัติ |
+| 📋 **Transfer History** | เก็บประวัติการส่งไฟล์และข้อความ 50 รายการ |
+| 🗜️ **Smart ZIP** | รวมหลายไฟล์เป็น ZIP อัตโนมัติ (รองรับ folder structure) |
 | 📶 **QR Code** | สแกน QR เข้าห้องได้ทันที |
+| 🛡️ **Error Boundary** | จัดการ crash ด้วยหน้า Error น่ารักๆ |
+| 📡 **Offline Detection** | แจ้งเตือนเมื่อเน็ตหลุด/กลับมา |
+| 🔍 **SEO Optimized** | OpenGraph และ Twitter Cards สำหรับแชร์ลิงก์ |
+| ⌨️ **Keyboard Navigation** | รองรับการใช้งานด้วยคีย์บอร์ด |
 
 ## 🔐 Discovery Modes
 
@@ -54,20 +59,22 @@
 
 ## 🚀 Quick Start
 
+**ต้องติดตั้ง Bun ก่อน:** https://bun.sh
+
 ```bash
 # Clone
 git clone https://github.com/DDME36/PurrDrop.git
 cd PurrDrop
 
 # Install
-npm install
+bun install
 
 # Development
-npm run dev
+bun run dev
 
 # Production build
-npm run build
-npm start
+bun run build
+bun start
 ```
 
 เปิด http://localhost:3000
@@ -79,8 +86,8 @@ npm start
 2. สร้าง Web Service ใหม่บน [Render](https://render.com)
 3. เชื่อมต่อ GitHub repo
 4. ตั้งค่า:
-   - Build Command: `npm install && npm run build`
-   - Start Command: `npm start`
+   - Build Command: `bun install && bun run build`
+   - Start Command: `bun start`
 
 ดูคู่มือเพิ่มเติมที่ [DEPLOY.md](./DEPLOY.md)
 
@@ -97,15 +104,28 @@ npm start
 
 ## 📱 How to Use
 
+### ส่งไฟล์
 1. **เปิดเว็บ** บนอุปกรณ์ที่ 1
 2. **เปิดเว็บเดียวกัน** บนอุปกรณ์ที่ 2
 3. **เลือกโหมด** (Public/WiFi/Private)
 4. **คลิกที่ตัวละคร** ของเพื่อน → เลือกไฟล์
 5. **อีกเครื่องกด** "รับเลย!" 🎉
 
+### ส่งข้อความ/ลิงก์
+1. **กดปุ่ม 📄** (Floating button ล่างขวา)
+2. **พิมพ์ข้อความ** หรือวาง URL
+3. **เลือกเพื่อน** ที่จะส่งให้
+4. **กดส่ง** - ข้อความจะถูกเก็บในประวัติพร้อมปุ่มคัดลอก
+
+### ดูประวัติ
+- **กดไอคอน 📋** ที่มุมขวาบน
+- **ดูข้อความย้อนหลัง** และคัดลอกได้ทันที
+- **ดูไฟล์ที่ส่ง/รับ** ทั้งหมด
+
 ## 🛠️ Tech Stack
 
 - **Frontend**: Next.js 16, React 19, Tailwind CSS 4
+- **Runtime**: Bun (fast JavaScript runtime)
 - **Real-time**: Socket.io (signaling)
 - **Transfer**: WebRTC DataChannel (P2P)
 - **PWA**: Service Worker

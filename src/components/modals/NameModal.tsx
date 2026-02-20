@@ -52,8 +52,8 @@ export function NameModal({ show, currentName, onSubmit, onClose }: NameModalPro
   };
 
   return (
-    <div className="modal show modal-keyboard-aware">
-      <div className="modal-content modal-small modal-input-modal">
+    <div className="modal show modal-keyboard-aware" onClick={onClose}>
+      <div className="modal-content modal-small modal-input-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-icon"><PencilIcon /></div>
         <div className="modal-title">ตั้งชื่อใหม่</div>
         <input
@@ -66,12 +66,13 @@ export function NameModal({ show, currentName, onSubmit, onClose }: NameModalPro
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
           onFocus={handleFocus}
+          autoFocus
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
         />
-        <div className="modal-actions" style={{ marginTop: 16 }}>
+        <div className="modal-actions">
           <button className="btn btn-reject" onClick={onClose}>ยกเลิก</button>
           <button className="btn btn-accept" onClick={handleSubmit}>บันทึก</button>
         </div>

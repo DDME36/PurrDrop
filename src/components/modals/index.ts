@@ -9,3 +9,4 @@ export { HistoryModal } from './HistoryModal';
 export { TextShareModal } from './TextShareModal';
 export { ConfirmModal } from './ConfirmModal';
 export { FeedbackModal } from './FeedbackModal';
+export { TextViewModal } from './TextViewModal';

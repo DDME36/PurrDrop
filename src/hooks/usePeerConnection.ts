@@ -24,7 +24,7 @@ interface TransferProgress {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: 'pending' | 'sending' | 'receiving' | 'complete' | 'error';
+  status: 'pending' | 'sending' | 'receiving' | 'complete' | 'saving' | 'error';
   connectionType?: 'direct' | 'stun' | 'relay';
 }
 
@@ -70,6 +70,12 @@ export function usePeerConnection() {
     info: { name: string; size: number; type: string };
     streamWriter?: StreamWriter;
     useStreaming: boolean;
+    received: number;
+  }>>(new Map());
+  const receivingTextsRef = useRef<Map<string, {
+    chunks: string[];
+    totalChunks: number;
+    totalLength: number;
     received: number;
   }>>(new Map());
   const myPeerRef = useRef<Peer | null>(null);
@@ -150,7 +156,16 @@ export function usePeerConnection() {
     };
 
     channel.onerror = (e) => {
-      console.error(`DataChannel error:`, e);
+      // DataChannel errors are often empty objects - this is normal WebRTC behavior
+      // The actual error details are usually in the RTCPeerConnection state
+      const peer = peersRef.current.find(p => p.id === peerId);
+      console.warn(`⚠️ DataChannel error with ${peer?.name || peerId}`, e);
+      
+      // Don't show error to user unless it's during an active transfer
+      if (transfer && transfer.peerId === peerId && transfer.status !== 'complete') {
+        setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
+        setTimeout(() => setTransfer(null), 3000);
+      }
     };
 
     channel.onmessage = async (e) => {
@@ -228,16 +243,20 @@ export function usePeerConnection() {
               console.log(`✅ File complete: ${receiving.info.name}`);
 
               if (receiving.streamWriter) {
-                // Streaming mode - just close the writer
+                // Streaming mode - file saved automatically
                 await receiving.streamWriter.close();
                 console.log('📁 Stream closed - file saved');
+                setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
               } else {
-                // Memory mode - create blob and download
+                // Memory mode - waiting for user to save
+                setTransfer(prev => prev ? { ...prev, progress: 100, status: 'saving' } : null);
                 const blob = new Blob(receiving.chunks, { type: receiving.info.type || 'application/octet-stream' });
                 downloadBlob(blob, receiving.info.name);
+                // Set complete after download triggered
+                setTimeout(() => {
+                  setTransfer(prev => prev ? { ...prev, status: 'complete' } : null);
+                }, 500);
               }
-
-              setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
 
               const senderPeer = peersRef.current.find(p => p.id === peerId);
               setTransferResult({
@@ -265,6 +284,39 @@ export function usePeerConnection() {
                 timestamp: Date.now()
               });
             }
+          } else if (msg.type === 'text-start') {
+            // Start receiving chunked text
+            receivingTextsRef.current.set(msg.textId, {
+              chunks: new Array(msg.totalChunks),
+              totalChunks: msg.totalChunks,
+              totalLength: msg.totalLength,
+              received: 0
+            });
+            console.log(`📥 Receiving long text: ${msg.totalChunks} chunks`);
+          } else if (msg.type === 'text-chunk') {
+            const receivingText = receivingTextsRef.current.get(msg.textId);
+            if (receivingText) {
+              receivingText.chunks[msg.chunkIndex] = msg.chunk;
+              receivingText.received++;
+              
+              // Check if all chunks received
+              if (receivingText.received === receivingText.totalChunks) {
+                const fullText = receivingText.chunks.join('');
+                const senderPeer = peersRef.current.find(p => p.id === peerId);
+                if (senderPeer) {
+                  setTextMessage({
+                    from: senderPeer,
+                    text: fullText,
+                    timestamp: Date.now()
+                  });
+                }
+                receivingTextsRef.current.delete(msg.textId);
+                console.log('✅ Long text received completely');
+              }
+            }
+          } else if (msg.type === 'text-end') {
+            // Cleanup if needed
+            receivingTextsRef.current.delete(msg.textId);
           }
         } catch (err) {
           console.error('Parse error:', err);
@@ -608,11 +660,48 @@ export function usePeerConnection() {
         });
       }
 
-      dc.send(JSON.stringify({
-        type: 'text-message',
-        payload: text
-      }));
-      console.log('📤 Sent text message');
+      // For long text, split into chunks to avoid DataChannel size limits
+      const MAX_CHUNK_SIZE = 16000; // Safe size for all browsers
+      if (text.length > MAX_CHUNK_SIZE) {
+        const textId = uuidv4();
+        const chunks = Math.ceil(text.length / MAX_CHUNK_SIZE);
+        
+        // Send start message
+        dc.send(JSON.stringify({
+          type: 'text-start',
+          textId,
+          totalChunks: chunks,
+          totalLength: text.length
+        }));
+
+        // Send chunks
+        for (let i = 0; i < chunks; i++) {
+          const chunk = text.slice(i * MAX_CHUNK_SIZE, (i + 1) * MAX_CHUNK_SIZE);
+          dc.send(JSON.stringify({
+            type: 'text-chunk',
+            textId,
+            chunkIndex: i,
+            chunk
+          }));
+          // Small delay to prevent overwhelming the channel
+          await new Promise(r => setTimeout(r, 10));
+        }
+
+        // Send end message
+        dc.send(JSON.stringify({
+          type: 'text-end',
+          textId
+        }));
+        
+        console.log(`📤 Sent long text in ${chunks} chunks`);
+      } else {
+        // Short text - send directly
+        dc.send(JSON.stringify({
+          type: 'text-message',
+          payload: text
+        }));
+        console.log('📤 Sent text message');
+      }
       
       // Temporary transfer success spoof for history
       setTransferResult({

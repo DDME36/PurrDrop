@@ -1339,6 +1339,21 @@ body {
     0 0 0 3px var(--accent-pink);
 }
 
+.peer-card:focus-visible {
+  outline: none;
+  transform: translateY(-12px) scale(1.02);
+  box-shadow:
+    0 20px 40px rgba(255, 179, 209, 0.3),
+    0 0 0 4px var(--accent-lavender);
+  border-color: var(--accent-lavender);
+}
+
+[data-theme="dark"] .peer-card:focus-visible {
+  box-shadow:
+    0 20px 40px rgba(168, 180, 232, 0.3),
+    0 0 0 4px var(--accent-lavender);
+}
+
 .peer-card.drag-over {
   transform: scale(1.08);
   border-color: var(--accent-mint);
@@ -2153,12 +2168,12 @@ body {
 @keyframes modalScaleIn {
   from {
     opacity: 0;
-    transform: scale(0.8) translateY(20px);
+    transform: scale(0.9);
   }
 
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: scale(1);
   }
 }
 
@@ -2205,6 +2220,13 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+/* History and Text Share modals - left align */
+.modal-history .modal-title,
+.modal-text-share .modal-title,
+.modal-text-view .modal-title {
+  justify-content: flex-start;
 }
 
 .modal-title svg {
@@ -2262,102 +2284,37 @@ body {
 }
 
 .modal-emoji {
-  max-width: 340px;
-}
-
-.modal-help {
-  max-width: 400px;
-}
-
-.modal-qr .qr-container {
-  background: white;
-  padding: 20px;
-  border-radius: var(--radius-sm);
-  border: 3px solid var(--accent-pink);
-  margin: 20px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 30px rgba(255, 179, 209, 0.2);
-}
-
-.qr-placeholder {
-  width: 200px;
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-}
-
-/* Name Input */
-.name-input {
-  width: 100%;
-  padding: 16px 20px;
-  border: 3px solid var(--accent-mint);
-  border-radius: 50px;
-  font-size: 16px;
-  font-family: var(--font-body);
-  text-align: center;
-  outline: none;
-  transition: all 0.3s ease;
-  background: var(--bg-card);
-  color: var(--text-primary);
-}
-
-.name-input:focus {
-  border-color: var(--accent-pink);
-  box-shadow: 0 0 20px rgba(255, 179, 209, 0.4);
-}
-
-[data-theme="dark"] .name-input:focus {
-  box-shadow: 0 0 20px rgba(255, 107, 157, 0.3);
+  max-width: 380px;
 }
 
 /* Emoji Grid */
 .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr) !important;
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin: 20px 0;
   max-height: 320px;
-  overflow-y: scroll;
+  overflow-y: auto;
   overflow-x: hidden;
   padding: 8px;
-  /* Hide scrollbar but keep functionality */
-  scrollbar-width: none !important;
-  /* Firefox */
-  -ms-overflow-style: none !important;
-  /* IE/Edge */
 }
 
-/* Hide scrollbar for emoji grid - Chrome/Safari/Edge */
 .emoji-grid::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  background: transparent !important;
+  width: 6px;
 }
 
 .emoji-grid::-webkit-scrollbar-track {
-  display: none !important;
-  background: transparent !important;
+  background: var(--bg-cream);
+  border-radius: 3px;
 }
 
 .emoji-grid::-webkit-scrollbar-thumb {
-  display: none !important;
-  background: transparent !important;
+  background: var(--accent-lavender);
+  border-radius: 3px;
 }
 
-/* Modal emoji specific override */
-.modal-emoji .emoji-grid {
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
-}
-
-.modal-emoji .emoji-grid::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
+.emoji-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-pink);
 }
 
 .emoji-option {
@@ -2384,12 +2341,88 @@ body {
   transform: scale(1.08);
 }
 
+.modal-help {
+  max-width: 500px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.help-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.help-tab {
+  flex: 1;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+
+.help-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 179, 209, 0.05);
+}
+
+.help-tab.active {
+  color: var(--accent-pink);
+  border-bottom-color: var(--accent-pink);
+}
+
+.help-content {
+  min-height: 200px;
+}
+
+.help-section {
+  margin-bottom: 24px;
+}
+
+.help-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent-pink);
+}
+
+.help-features {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+
+.help-features li {
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  background: rgba(255, 179, 209, 0.05);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.help-features li strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 /* Help Steps */
 .help-steps {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin: 24px 0;
+  margin: 12px 0;
 }
 
 .help-step {
@@ -2984,56 +3017,64 @@ body {
   }
 }
 
-/* iOS Keyboard-aware modal */
+/* Name Modal - Keyboard aware */
 .modal-keyboard-aware {
-  align-items: flex-start;
-  padding-top: 10vh;
-  padding-bottom: 50vh;
-  /* Space for keyboard */
-  overflow-y: auto;
+  /* Default: centered like other modals */
 }
 
 .modal-input-modal {
-  margin-top: 0;
-  margin-bottom: auto;
+  margin: 0;
   position: relative;
   text-align: center;
+  width: 100%;
+  max-width: 320px;
 }
 
 .modal-input-modal .modal-icon {
   animation: none;
-  margin: 0 auto 16px;
+  margin: 0 auto 12px;
 }
 
-/* iOS specific fixes */
-@supports (-webkit-touch-callout: none) {
-  .modal-keyboard-aware {
-    padding-top: 5vh;
-  }
-
-  .modal-input-modal {
-    transform: translateY(0);
-  }
-
-  .name-input:focus {
-    transform: translateY(-20px);
-  }
+.modal-input-modal .modal-icon svg {
+  width: 40px;
+  height: 40px;
 }
 
-/* Small screens */
+.modal-input-modal .modal-title {
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+
+.modal-input-modal .modal-actions {
+  margin-top: 16px;
+  gap: 8px;
+}
+
+/* Mobile keyboard handling - only adjust on small screens */
 @media (max-height: 600px) {
   .modal-keyboard-aware {
-    padding-top: 2vh;
+    align-items: flex-start;
+    padding-top: 15vh;
   }
 
   .modal-input-modal .modal-icon {
-    font-size: 40px;
-    margin-bottom: 8px;
+    display: none;
   }
 
   .modal-input-modal .modal-title {
     font-size: 18px;
     margin-bottom: 12px;
+  }
+}
+
+/* Very small screens */
+@media (max-height: 500px) {
+  .modal-keyboard-aware {
+    padding-top: 10vh;
+  }
+  
+  .modal-input-modal {
+    max-width: 280px;
   }
 }
 
@@ -3129,6 +3170,14 @@ body {
   border-left: 3px solid var(--accent-pink);
 }
 
+.history-item.text-message {
+  border-left-color: var(--accent-lavender);
+}
+
+.history-item.text-message .history-icon svg {
+  stroke: var(--accent-lavender);
+}
+
 .history-icon {
   font-size: 20px;
   display: flex;
@@ -3157,17 +3206,69 @@ body {
   text-overflow: ellipsis;
 }
 
+.history-text-preview {
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: rgba(255, 179, 209, 0.1);
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin: 4px 0;
+  max-height: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  line-height: 1.4;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.history-info:hover .history-text-preview {
+  background: rgba(255, 179, 209, 0.25);
+  transform: translateX(2px);
+}
+
 .history-meta {
   font-size: 12px;
   color: var(--text-muted);
   display: flex;
+  align-items: center;
   gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .history-time {
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+.history-copy-btn {
+  background: var(--accent-lavender);
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: white;
+}
+
+.history-copy-btn:hover {
+  background: var(--accent-pink);
+  transform: scale(1.1);
+}
+
+.history-copy-btn svg {
+  stroke: white;
+  width: 16px;
+  height: 16px;
 }
 
 .history-status {
@@ -3205,6 +3306,64 @@ body {
 
 .text-share-content {
   margin: 20px 0;
+}
+
+/* Text View Modal */
+.modal-text-view {
+  max-width: 500px;
+  max-height: 80vh;
+}
+
+.text-view-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 16px;
+}
+
+.text-view-from {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-pink);
+}
+
+.text-view-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.text-view-content {
+  background: var(--bg-cream);
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  max-height: 50vh;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 20px;
+}
+
+.text-view-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.text-view-content::-webkit-scrollbar-track {
+  background: var(--bg-card);
+  border-radius: 4px;
+}
+
+.text-view-content::-webkit-scrollbar-thumb {
+  background: var(--accent-lavender);
+  border-radius: 4px;
+}
+
+.text-view-content::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-pink);
 }
 
 .text-input-wrap {
@@ -3266,12 +3425,14 @@ body {
   font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: 8px;
+  text-align: left;
 }
 
 .peer-select-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-start;
 }
 
 .peer-select-item {
@@ -4498,6 +4659,33 @@ body {
 }
 
 /* QR Modal enhancements */
+.modal-qr {
+  max-width: 400px;
+}
+
+.qr-container {
+  background: white;
+  padding: 20px;
+  border-radius: var(--radius-sm);
+  border: 3px solid var(--accent-pink);
+  margin: 20px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 30px rgba(255, 179, 209, 0.2);
+  width: fit-content;
+}
+
+.qr-placeholder {
+  width: 200px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
 .qr-mode-icon {
   display: flex;
   align-items: center;
@@ -4829,9 +5017,25 @@ body {
   transform: scale(0.95);
 }
 
+.fab-btn:focus-visible {
+  outline: 3px solid var(--accent-pink);
+  outline-offset: 4px;
+}
+
 .fab-icon {
   width: 24px;
   height: 24px;
+}
+
+/* Add padding to app when FAB is visible to prevent content overlap */
+.app:has(+ .fab-container) {
+  padding-bottom: 100px;
+}
+
+@media screen and (max-width: 600px) {
+  .app:has(+ .fab-container) {
+    padding-bottom: 120px;
+  }
 }
 
 /* --- New UI Improvements --- */
@@ -4911,29 +5115,34 @@ button.peer-select-item.selected {
   padding: 4px;
 }
 
-/* Improve Name Input */
+/* Name Input */
 .name-input {
-  background: var(--bg-cream) !important;
-  border-color: transparent !important;
-  font-size: 18px !important;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.05), 0 4px 15px rgba(255, 179, 209, 0.2) !important;
-}
-
-[data-theme="dark"] .name-input {
-  background: rgba(255, 255, 255, 0.05) !important;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), 0 4px 15px rgba(0,0,0,0.3) !important;
+  width: 100%;
+  padding: 14px 20px;
+  border: 2px solid var(--accent-mint);
+  border-radius: 50px;
+  font-size: 16px;
+  font-family: var(--font-body);
+  text-align: center;
+  outline: none;
+  transition: all 0.3s ease;
+  background: var(--bg-card);
+  color: var(--text-primary);
 }
 
 .name-input:focus {
-  background: var(--bg-card) !important;
-  border-color: var(--accent-pink) !important;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02), 0 8px 25px rgba(255, 179, 209, 0.4) !important;
-  transform: translateY(-2px) !important;
+  border-color: var(--accent-pink);
+  box-shadow: 0 0 20px rgba(255, 179, 209, 0.4);
+  transform: scale(1.02);
+}
+
+[data-theme="dark"] .name-input {
+  background: var(--bg-card);
+  border-color: var(--accent-mint);
 }
 
 [data-theme="dark"] .name-input:focus {
-  background: var(--bg-card) !important;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.1), 0 8px 25px rgba(255, 107, 157, 0.3) !important;
+  box-shadow: 0 0 20px rgba(255, 107, 157, 0.3);
 }
 
 @media screen and (min-width: 600px) {

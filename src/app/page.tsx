@@ -12,6 +12,7 @@ import { Confetti, ConfettiRef } from '@/components/Confetti';
 import { Toast, ToastRef } from '@/components/Toast';
 import { Footer } from '@/components/Footer';
 import { BrowserWarning } from '@/components/BrowserWarning';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import {
   FileOfferModal,
   NameModal,
@@ -26,7 +27,7 @@ import { useSound } from '@/hooks/useSound';
 import { usePeerConnection } from '@/hooks/usePeerConnection';
 import { useTheme } from '@/hooks/useTheme';
 import { useNotification } from '@/hooks/useNotification';
-import { Peer } from '@/lib/critters';
+import { createZipFile, FileWithContext } from '@/lib/compression';
 import { getHistory, addToHistory, TransferRecord } from '@/lib/transferHistory';
 
 export default function Home() {
@@ -188,18 +189,17 @@ export default function Home() {
       play('success');
       toastRef.current?.show(`ข้อความจาก ${textMessage.from.name}: ${textMessage.text}`, 'success');
       
-      // Add to history
+      // Add to history with text content
       addToHistory({
         fileName: 'ข้อความ/ลิงก์',
         fileSize: new Blob([textMessage.text]).size,
         peerName: textMessage.from.name,
         direction: 'received',
         success: true,
+        type: 'text',
+        textContent: textMessage.text,
       });
       setHistory(getHistory());
-      
-      // Auto copy to clipboard option could go here if permitted by browser, 
-      // but standard approach is to let user read it from the long toast.
       
       clearTextMessage();
     }
@@ -223,187 +223,33 @@ export default function Home() {
     }
   }, [transferResult, clearTransferResult]);
 
-  // Smart ZIP - ฉลาดเลือกว่าจะบีบหรือไม่
-  // Smart ZIP - ฉลาดเลือกว่าจะบีบหรือไม่
-  // MAX 100MB สำหรับ ZIP เพื่อป้องกัน RAM เต็ม
-  const MAX_ZIP_SIZE = 100 * 1024 * 1024;
-
-  // Import type for use in page (can also define locally if import fails but better to share)
-  // Assuming we can import from PeerCard, but circular deps might be an issue if PeerCard imports peers
-  // Let's redefine locally to be safe or import if clean. 
-  // Given previous steps, let's look at PeerCard.tsx content again. It exports FileWithContext.
-
-  const createZipFile = useCallback(async (filesWithContext: { file: File, path: string }[]): Promise<File | null> => {
-    // ตรวจสอบขนาดรวมก่อน
-    const totalSize = filesWithContext.reduce((acc, item) => acc + item.file.size, 0);
-
-    // ถ้าใหญ่เกิน limit ให้ return null (จะส่งทีละไฟล์แทน)
-    if (totalSize > MAX_ZIP_SIZE) {
-      console.warn(`⚠️ Total size ${(totalSize / 1024 / 1024).toFixed(1)}MB exceeds ZIP limit`);
-      return null;
-    }
-
-    // ไฟล์ที่บีบแล้วไม่เล็กลง (already compressed)
-    const SKIP_COMPRESS_TYPES = new Set([
-      // Images
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
-      // Video
-      'video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska',
-      // Audio
-      'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm', 'audio/aac',
-      // Archives
-      'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
-      'application/gzip', 'application/x-bzip2',
-      // Documents (already compressed)
-      'application/pdf',
-    ]);
-
-    const SKIP_COMPRESS_EXT = new Set([
-      '.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.heic',
-      '.mp4', '.mkv', '.avi', '.mov', '.webm',
-      '.mp3', '.aac', '.ogg', '.m4a', '.flac',
-      '.zip', '.rar', '.7z', '.gz', '.bz2', '.xz',
-      '.pdf', '.docx', '.xlsx', '.pptx',
-    ]);
-
-    const shouldCompress = (file: File): boolean => {
-      if (SKIP_COMPRESS_TYPES.has(file.type)) return false;
-      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-      if (SKIP_COMPRESS_EXT.has(ext)) return false;
-      // ไฟล์ใหญ่กว่า 50MB ไม่บีบ (กัน CPU ค้าง)
-      if (file.size > 50 * 1024 * 1024) return false;
-      return true;
-    };
-
-    console.log(`📦 Creating ZIP: ${filesWithContext.length} files, ${(totalSize / 1024 / 1024).toFixed(1)}MB`);
-
-    let zipSize = 22;
-    const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number; compressed: boolean }[] = [];
-    const encoder = new TextEncoder();
-
-    const crc32Table: number[] = [];
-    for (let i = 0; i < 256; i++) {
-      let c = i;
-      for (let j = 0; j < 8; j++) {
-        c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-      }
-      crc32Table[i] = c >>> 0;
-    }
-
-    const calcCrc32 = (data: Uint8Array): number => {
-      let crc = 0xFFFFFFFF;
-      for (let i = 0; i < data.length; i++) {
-        crc = (crc >>> 8) ^ crc32Table[(crc ^ data[i]) & 0xFF];
-      }
-      return (crc ^ 0xFFFFFFFF) >>> 0;
-    };
-
-    for (const { file, path } of filesWithContext) {
-      const data = new Uint8Array(await file.arrayBuffer());
-      // Use the preserved path name instead of just file.name
-      const name = encoder.encode(path);
-      const crc = calcCrc32(data);
-      const compress = shouldCompress(file);
-
-      console.log(`📦 ${path}: ${compress ? 'compress' : 'store'} (${file.type || 'unknown'})`);
-
-      fileInfos.push({ name, data, crc, compressed: compress });
-      zipSize += 30 + name.length + data.length;
-      zipSize += 46 + name.length;
-    }
-
-    const buffer = new ArrayBuffer(zipSize);
-    const view = new DataView(buffer);
-    const bytes = new Uint8Array(buffer);
-    let pos = 0;
-    let cdStart = 0;
-
-    // Local file headers + data
-    for (const { name, data, crc } of fileInfos) {
-      view.setUint32(pos, 0x04034b50, true); pos += 4; // signature
-      view.setUint16(pos, 20, true); pos += 2; // version
-      view.setUint16(pos, 0, true); pos += 2; // flags
-      view.setUint16(pos, 0, true); pos += 2; // compression (0 = store)
-      view.setUint16(pos, 0, true); pos += 2; // mod time
-      view.setUint16(pos, 0, true); pos += 2; // mod date
-      view.setUint32(pos, crc, true); pos += 4;
-      view.setUint32(pos, data.length, true); pos += 4; // compressed size
-      view.setUint32(pos, data.length, true); pos += 4; // uncompressed size
-      view.setUint16(pos, name.length, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2; // extra field length
-      bytes.set(name, pos); pos += name.length;
-      bytes.set(data, pos); pos += data.length;
-    }
-
-    cdStart = pos;
-
-    // Central directory
-    let localOffset = 0;
-    for (const { name, data, crc } of fileInfos) {
-      view.setUint32(pos, 0x02014b50, true); pos += 4;
-      view.setUint16(pos, 20, true); pos += 2;
-      view.setUint16(pos, 20, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint32(pos, crc, true); pos += 4;
-      view.setUint32(pos, data.length, true); pos += 4;
-      view.setUint32(pos, data.length, true); pos += 4;
-      view.setUint16(pos, name.length, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint16(pos, 0, true); pos += 2;
-      view.setUint32(pos, 0, true); pos += 4;
-      view.setUint32(pos, localOffset, true); pos += 4;
-      bytes.set(name, pos); pos += name.length;
-      localOffset += 30 + name.length + data.length;
-    }
-
-    const cdSize = pos - cdStart;
-
-    // End of central directory
-    view.setUint32(pos, 0x06054b50, true); pos += 4;
-    view.setUint16(pos, 0, true); pos += 2;
-    view.setUint16(pos, 0, true); pos += 2;
-    view.setUint16(pos, fileInfos.length, true); pos += 2;
-    view.setUint16(pos, fileInfos.length, true); pos += 2;
-    view.setUint32(pos, cdSize, true); pos += 4;
-    view.setUint32(pos, cdStart, true); pos += 4;
-    view.setUint16(pos, 0, true);
-
-    const timestamp = new Date().toISOString().slice(0, 10);
-    return new File([buffer], `PurrDrop_${timestamp}.zip`, { type: 'application/zip' });
-  }, [MAX_ZIP_SIZE]);
-
   // Handle multi-file selection
-  const handleMultiFiles = useCallback(async (filesWithContext: { file: File, path: string }[], peer: Peer) => {
+  const handleMultiFiles = useCallback(async (filesWithContext: FileWithContext[], peer: Peer) => {
     if (filesWithContext.length === 0) return;
 
-    // ไฟล์เดียว ส่งตรงๆ (เฉพาะถ้าไม่มี path ซับซ้อน หรือมีแค่ชื่อไฟล์)
+    // Single file - send directly (only if no complex path or just filename)
     if (filesWithContext.length === 1 && filesWithContext[0].path === filesWithContext[0].file.name) {
       sendFile(peer, filesWithContext[0].file);
       return;
     }
 
-    // หลายไฟล์ ให้ Zip รวม (Smart Folder: ใช้ path ที่เก็บมา สร้างโครงสร้าง folder ใน zip)
+    // Multiple files - create ZIP (Smart Folder: use preserved paths for folder structure)
     toastRef.current?.show('กำลังบีบอัดไฟล์...', 'info');
 
     try {
       const zipFile = await createZipFile(filesWithContext);
 
       if (zipFile) {
-        // Zip สำเร็จ ส่งไฟล์ Zip
+        // ZIP successful - send ZIP file
         sendFile(peer, zipFile);
       } else {
-        // Zip ไม่ผ่าน (เช่น ใหญ่เกิน 100MB) -> ส่งทีละไฟล์แบบรัวๆ (Queue)
+        // ZIP failed (e.g., > 100MB) -> send files one by one (Queue)
         toastRef.current?.show(`ไฟล์ใหญ่เกิน 100MB จะทยอยส่งทีละไฟล์ (${filesWithContext.length} ไฟล์)`, 'warning');
 
         // Simple queue to prevent freezing
         for (const item of filesWithContext) {
           await sendFile(peer, item.file);
-          // delay เล็กน้อย
+          // Small delay
           await new Promise(r => setTimeout(r, 500));
         }
       }
@@ -411,7 +257,7 @@ export default function Home() {
       console.error('ZIP error:', err);
       toastRef.current?.show('บีบอัดไฟล์ล้มเหลว', 'error');
     }
-  }, [createZipFile, sendFile]);
+  }, [sendFile]);
 
   const handleSelectPeer = useCallback((peer: Peer) => {
     vibrate(15);
@@ -467,6 +313,7 @@ export default function Home() {
   return (
     <>
       <BrowserWarning />
+      <OfflineBanner />
       <Clouds />
       <Confetti ref={confettiRef} />
       <Toast ref={toastRef} />
@@ -549,8 +396,9 @@ export default function Home() {
             className="fab-btn" 
             onClick={() => setShowTextShareModal(true)}
             title="ส่งข้อความ/ลิงก์"
+            aria-label="ส่งข้อความหรือลิงก์"
           >
-            <svg className="fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
               <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
               <path d="M10 9H8"/>
@@ -616,6 +464,18 @@ export default function Home() {
         peers={peers}
         onSend={(peer, text) => {
           sendText(peer.id, text, peer);
+          // Add sent text to history
+          addToHistory({
+            fileName: 'ข้อความ/ลิงก์',
+            fileSize: new Blob([text]).size,
+            peerName: peer.name,
+            direction: 'sent',
+            success: true,
+            type: 'text',
+            textContent: text,
+          });
+          setHistory(getHistory());
+          toastRef.current?.show(`ส่งข้อความให้ ${peer.name} แล้ว`, 'success');
         }}
         onClose={() => setShowTextShareModal(false)}
       />

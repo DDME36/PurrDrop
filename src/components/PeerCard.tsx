@@ -148,6 +148,15 @@ export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      role="button"
+      tabIndex={0}
+      aria-label={`ส่งไฟล์ให้ ${peer.name} (${peer.device})`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(peer);
+        }
+      }}
     >
       <span className="heart-float">💕</span>
       <div className="drop-overlay">

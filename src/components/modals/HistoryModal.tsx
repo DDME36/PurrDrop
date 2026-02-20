@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { TransferRecord, formatFileSize, formatTime, clearHistory } from '@/lib/transferHistory';
 import { ConfirmModal } from './ConfirmModal';
+import { TextViewModal } from './TextViewModal';
 
 // Lucide Icons
 const UploadIcon = () => (
@@ -18,6 +19,12 @@ const DownloadIcon = () => (
     <path d="M12 15V3"/>
     <path d="m7 10 5 5 5-5"/>
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+  </svg>
+);
+
+const MessageSquareIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
   </svg>
 );
 
@@ -76,6 +83,7 @@ interface HistoryModalProps {
 
 export function HistoryModal({ show, history, onClose, onClear }: HistoryModalProps) {
   const [showConfirm, setShowConfirm] = useState(false);
+  const [viewingText, setViewingText] = useState<TransferRecord | null>(null);
 
   if (!show) return null;
 
@@ -87,6 +95,12 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
     clearHistory();
     onClear();
     setShowConfirm(false);
+  };
+
+  const handleTextClick = (record: TransferRecord) => {
+    if (record.type === 'text' && record.textContent) {
+      setViewingText(record);
+    }
   };
 
   return (
@@ -106,12 +120,21 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
               </div>
             ) : (
               history.map(record => (
-                <div key={record.id} className={`history-item ${record.direction}`}>
+                <div key={record.id} className={`history-item ${record.direction} ${record.type === 'text' ? 'text-message' : ''}`}>
                   <div className="history-icon">
-                    {record.direction === 'sent' ? <UploadIcon /> : <DownloadIcon />}
+                    {record.type === 'text' ? (
+                      <MessageSquareIcon />
+                    ) : (
+                      record.direction === 'sent' ? <UploadIcon /> : <DownloadIcon />
+                    )}
                   </div>
-                  <div className="history-info">
+                  <div className="history-info" onClick={() => handleTextClick(record)} style={{ cursor: record.type === 'text' ? 'pointer' : 'default' }}>
                     <div className="history-filename">{record.fileName}</div>
+                    {record.type === 'text' && record.textContent && (
+                      <div className="history-text-preview" title="คลิกเพื่ออ่านเต็ม">
+                        {record.textContent.length > 100 ? record.textContent.slice(0, 100) + '...' : record.textContent}
+                      </div>
+                    )}
                     <div className="history-meta">
                       <span>{formatFileSize(record.fileSize)}</span>
                       <span>•</span>
@@ -119,6 +142,22 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
                     </div>
                   </div>
                   <div className="history-time">{formatTime(record.timestamp)}</div>
+                  {record.type === 'text' && record.textContent && (
+                    <button 
+                      className="history-copy-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(record.textContent!);
+                        const btn = e.currentTarget;
+                        const original = btn.innerHTML;
+                        btn.innerHTML = '✓';
+                        setTimeout(() => btn.innerHTML = original, 1000);
+                      }}
+                      title="คัดลอก"
+                    >
+                      <ClipboardListIcon />
+                    </button>
+                  )}
                   <div className={`history-status ${record.success ? 'success' : 'failed'}`}>
                     {record.success ? <CheckSmallIcon /> : <XSmallIcon />}
                   </div>
@@ -145,6 +184,14 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
         cancelText="ยกเลิก"
         onConfirm={handleConfirmClear}
         onCancel={() => setShowConfirm(false)}
+      />
+
+      <TextViewModal
+        show={!!viewingText}
+        text={viewingText?.textContent || ''}
+        from={viewingText?.peerName || ''}
+        timestamp={viewingText ? formatTime(viewingText.timestamp) : ''}
+        onClose={() => setViewingText(null)}
       />
     </>
   );

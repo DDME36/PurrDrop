@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 // Lucide Icons
 const SmartphoneIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-pink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,42 +38,32 @@ const GiftIcon = () => (
   </svg>
 );
 
-const EarthIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21.54 15H17a2 2 0 0 0-2 2v4.54" />
-    <path d="M7 3.34V5a3 3 0 0 0 3 3a2 2 0 0 1 2 2c0 1.1.9 2 2 2a2 2 0 0 0 2-2c0-1.1.9-2 2-2h3.17" />
-    <path d="M11 21.95V18a2 2 0 0 0-2-2a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05" />
-    <circle cx="12" cy="12" r="10" />
+const FileTextIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-lavender)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+    <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+    <path d="M10 9H8"/>
+    <path d="M16 13H8"/>
+    <path d="M16 17H8"/>
   </svg>
 );
 
-const WifiIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 20h.01" />
-    <path d="M2 8.82a15 15 0 0 1 20 0" />
-    <path d="M5 12.859a10 10 0 0 1 14 0" />
-    <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+const HistoryIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-mint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+    <path d="M12 11h4"/>
+    <path d="M12 16h4"/>
+    <path d="M8 11h.01"/>
+    <path d="M8 16h.01"/>
   </svg>
 );
 
-const LockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
-
-const FlowerIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-pink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3" />
-    <path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93" />
-    <path d="M17.5 6.5a4 4 0 0 1 0 5.66c-1.38 1.38-3.56 1.52-5.09.42" />
-    <path d="M20 12a4 4 0 0 1-4 4c-1.95 0-3.58-1.4-3.93-3.25" />
-    <path d="M17.5 17.5a4 4 0 0 1-5.66 0c-1.38-1.38-1.52-3.56-.42-5.09" />
-    <path d="M12 22a4 4 0 0 1-4-4c0-1.95 1.4-3.58 3.25-3.93" />
-    <path d="M6.5 17.5a4 4 0 0 1 0-5.66c1.38-1.38 3.56-1.52 5.09-.42" />
-    <path d="M4 12a4 4 0 0 1 4-4c1.95 0 3.58 1.4 3.93 3.25" />
-    <path d="M6.5 6.5a4 4 0 0 1 5.66 0c1.38 1.38 1.52 3.56.42 5.09" />
+const AlertCircleIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 8v4"/>
+    <path d="M12 16h.01"/>
   </svg>
 );
 
@@ -81,39 +73,111 @@ interface HelpModalProps {
 }
 
 export function HelpModal({ show, onClose }: HelpModalProps) {
+  const [activeTab, setActiveTab] = useState<'basic' | 'text' | 'history' | 'troubleshoot'>('basic');
+
   if (!show) return null;
 
   return (
-    <div className="modal show">
-      <div className="modal-content modal-help">
-        <div className="modal-title">วิธีใช้งาน <FlowerIcon /></div>
-        <div className="help-steps">
-          <div className="help-step">
-            <div className="step-icon"><SmartphoneIcon /></div>
-            <div className="step-text">เปิด PurrDrop ในอุปกรณ์อื่น</div>
-          </div>
-          <div className="help-step">
-            <div className="step-icon"><RefreshCwIcon /></div>
-            <div className="step-text">
-              เลือกโหมดเดียวกัน:
-              <br />
-              <small><EarthIcon /> สาธารณะ - เห็นทุกคน</small>
-              <br />
-              <small><WifiIcon /> WiFi - เฉพาะเครือข่ายเดียวกัน</small>
-              <br />
-              <small><LockIcon /> ส่วนตัว - ใช้รหัสห้อง 5 หลัก</small>
-            </div>
-          </div>
-          <div className="help-step">
-            <div className="step-icon"><PointerIcon /></div>
-            <div className="step-text">แตะที่เพื่อนที่ต้องการส่งไฟล์</div>
-          </div>
-          <div className="help-step">
-            <div className="step-icon"><GiftIcon /></div>
-            <div className="step-text">เลือกไฟล์แล้วส่งเลย!</div>
-          </div>
+    <div className="modal show" onClick={onClose}>
+      <div className="modal-content modal-help" onClick={e => e.stopPropagation()}>
+        <div className="modal-title">วิธีใช้งาน</div>
+        
+        <div className="help-tabs">
+          <button 
+            className={`help-tab ${activeTab === 'basic' ? 'active' : ''}`}
+            onClick={() => setActiveTab('basic')}
+          >
+            ส่งไฟล์
+          </button>
+          <button 
+            className={`help-tab ${activeTab === 'text' ? 'active' : ''}`}
+            onClick={() => setActiveTab('text')}
+          >
+            ส่งข้อความ
+          </button>
+          <button 
+            className={`help-tab ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+          >
+            ประวัติ
+          </button>
+          <button 
+            className={`help-tab ${activeTab === 'troubleshoot' ? 'active' : ''}`}
+            onClick={() => setActiveTab('troubleshoot')}
+          >
+            แก้ปัญหา
+          </button>
         </div>
-        <button className="btn btn-close-modal" onClick={onClose}>เข้าใจแล้ว!</button>
+
+        <div className="help-content">
+          {activeTab === 'basic' && (
+            <div className="help-steps">
+              <div className="help-step">
+                <div className="step-icon"><SmartphoneIcon /></div>
+                <div className="step-text">เปิด PurrDrop ในอุปกรณ์อื่น</div>
+              </div>
+              <div className="help-step">
+                <div className="step-icon"><RefreshCwIcon /></div>
+                <div className="step-text">
+                  เลือกโหมดเดียวกัน (สาธารณะ / WiFi / ส่วนตัว)
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="step-icon"><PointerIcon /></div>
+                <div className="step-text">คลิกที่เพื่อน → เลือกไฟล์ (หรือลากไฟล์มาวาง)</div>
+              </div>
+              <div className="help-step">
+                <div className="step-icon"><GiftIcon /></div>
+                <div className="step-text">เพื่อนกด "รับเลย!" → ไฟล์ส่งผ่าน P2P</div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'text' && (
+            <div className="help-steps">
+              <div className="help-step">
+                <div className="step-icon"><FileTextIcon /></div>
+                <div className="step-text">
+                  กดปุ่ม 📄 (มุมล่างขวา) → พิมพ์ข้อความ → เลือกเพื่อน → ส่ง
+                  <br /><br />
+                  <small>รองรับข้อความยาว, URL, และข้อความหลายบรรทัด</small>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'history' && (
+            <div className="help-steps">
+              <div className="help-step">
+                <div className="step-icon"><HistoryIcon /></div>
+                <div className="step-text">
+                  กดไอคอน 📋 (มุมขวาบน) → ดูไฟล์และข้อความที่ส่ง/รับ
+                  <br /><br />
+                  <small>คลิกที่ข้อความเพื่ออ่านเต็ม หรือกดปุ่มคัดลอก</small>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'troubleshoot' && (
+            <div className="help-steps">
+              <div className="help-step">
+                <div className="step-icon"><AlertCircleIcon /></div>
+                <div className="step-text">
+                  <strong>ไม่เห็นเพื่อน:</strong> ลอง refresh หน้าเว็บทั้งสองเครื่อง
+                  <br /><br />
+                  <strong>ส่งไฟล์ไม่ได้:</strong> ตรวจสอบว่าอยู่โหมดเดียวกัน
+                  <br /><br />
+                  <strong>ข้าม Network:</strong> ใช้โหมดส่วนตัว (Private)
+                  <br /><br />
+                  <strong>VPN:</strong> ปิด VPN หรือใช้โหมดส่วนตัว
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <button className="btn btn-close-modal" onClick={onClose}>เข้าใจแล้ว</button>
       </div>
     </div>
   );
