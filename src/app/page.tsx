@@ -220,13 +220,15 @@ export default function Home() {
   useEffect(() => {
     if (transferResult) {
       if (transferResult.success) {
-        // Add to history
+        // Add to history with correct direction and type
         addToHistory({
           fileName: transferResult.fileName,
           fileSize: transferResult.fileSize,
           peerName: transferResult.peerName,
-          direction: 'sent',
+          direction: transferResult.direction,
           success: true,
+          type: transferResult.type,
+          textContent: transferResult.textContent,
         });
         setHistory(getHistory());
       }
@@ -297,20 +299,10 @@ export default function Home() {
   }, [handleMultiFiles]);
 
   const handleAcceptFile = useCallback(() => {
-    if (fileOffer) {
-      // Add to history when receiving
-      addToHistory({
-        fileName: fileOffer.file.name,
-        fileSize: fileOffer.file.size,
-        peerName: fileOffer.from.name,
-        direction: 'received',
-        success: true,
-      });
-      setHistory(getHistory());
-    }
+    // Don't add to history here - wait for transfer to complete
     acceptFile();
     toastRef.current?.show('กำลังรับไฟล์...', 'info');
-  }, [acceptFile, fileOffer]);
+  }, [acceptFile]);
 
   const handleRejectFile = useCallback(() => {
     rejectFile();
@@ -475,18 +467,8 @@ export default function Home() {
         peers={peers}
         onSend={(peer, text) => {
           sendText(peer.id, text, peer);
-          // Add sent text to history
-          addToHistory({
-            fileName: 'ข้อความ/ลิงก์',
-            fileSize: new Blob([text]).size,
-            peerName: peer.name,
-            direction: 'sent',
-            success: true,
-            type: 'text',
-            textContent: text,
-          });
-          setHistory(getHistory());
-          toastRef.current?.show(`ส่งข้อความให้ ${peer.name} แล้ว`, 'success');
+          // History will be added automatically when transfer completes
+          toastRef.current?.show(`กำลังส่งข้อความให้ ${peer.name}...`, 'info');
         }}
         onClose={() => setShowTextShareModal(false)}
       />

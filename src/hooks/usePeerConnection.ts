@@ -34,6 +34,9 @@ interface TransferResult {
   fileName: string;
   fileSize: number;
   peerName: string;
+  direction: 'sent' | 'received';
+  type?: 'file' | 'text';
+  textContent?: string;
 }
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
@@ -270,6 +273,7 @@ export function usePeerConnection() {
                 fileName: receiving.info.name,
                 fileSize: receiving.info.size,
                 peerName: senderPeer?.name || 'เพื่อน',
+                direction: 'received',
               });
 
               receivingFilesRef.current.delete(msg.fileId);
@@ -289,6 +293,15 @@ export function usePeerConnection() {
                 text: msg.payload,
                 timestamp: Date.now()
               });
+              
+              // Show notification for received text
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(`ข้อความจาก ${senderPeer.name}`, {
+                  body: msg.payload.length > 100 ? msg.payload.substring(0, 100) + '...' : msg.payload,
+                  icon: '/icon-192.png',
+                  tag: 'text-message',
+                });
+              }
             }
           } else if (msg.type === 'text-start') {
             // Start receiving chunked text
@@ -315,6 +328,15 @@ export function usePeerConnection() {
                     text: fullText,
                     timestamp: Date.now()
                   });
+                  
+                  // Show notification for received long text
+                  if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification(`ข้อความจาก ${senderPeer.name}`, {
+                      body: fullText.length > 100 ? fullText.substring(0, 100) + '...' : fullText,
+                      icon: '/icon-192.png',
+                      tag: 'text-message',
+                    });
+                  }
                 }
                 receivingTextsRef.current.delete(msg.textId);
                 console.log('✅ Long text received completely');
@@ -640,6 +662,7 @@ export function usePeerConnection() {
         fileName: file.name,
         fileSize: file.size,
         peerName: targetPeer.name,
+        direction: 'sent',
       });
 
       // Release wake lock after transfer complete
@@ -677,6 +700,7 @@ export function usePeerConnection() {
         fileName: file.name,
         fileSize: file.size,
         peerName: targetPeer.name,
+        direction: 'sent',
       });
       setTimeout(() => setTransfer(null), 5000);
     }
@@ -685,13 +709,28 @@ export function usePeerConnection() {
   const sendTextViaWebRTC = useCallback(async (peerId: string, text: string, targetPeer: Peer) => {
     console.log(`📤 Starting Text transfer to ${peerId}`);
     
+    // Check text size limit (1MB max for safety)
+    const textSize = new Blob([text]).size;
+    if (textSize > 1024 * 1024) {
+      console.error('❌ Text too large:', textSize);
+      setTransferResult({
+        success: false,
+        fileName: 'ข้อความใหญ่เกินไป (สูงสุด 1MB)',
+        fileSize: textSize,
+        peerName: targetPeer.name,
+        direction: 'sent',
+      });
+      setTimeout(() => setTransferResult(null), 5000);
+      return;
+    }
+    
     // Set pending UI state to inform user we are trying to connect
     setTransferResult(null);
     setTransfer({
       peerId,
       peerName: targetPeer.name,
       fileName: 'กำลังส่งข้อความ...',
-      fileSize: new Blob([text]).size,
+      fileSize: textSize,
       progress: 0,
       status: 'sending',
     });
@@ -712,7 +751,7 @@ export function usePeerConnection() {
         socketRef.current.emit('rtc-offer', { to: peerId, offer });
         
         await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Connection timeout')), 15000); // Increased to 15s
+          const timeout = setTimeout(() => reject(new Error('Connection timeout')), 20000); // Increased to 20s for long text
           
           const handleOpen = () => { clearTimeout(timeout); clean(); resolve(); };
           const handleClose = () => { clearTimeout(timeout); clean(); reject(new Error('DataChannel closed before open')); };
@@ -746,7 +785,7 @@ export function usePeerConnection() {
           totalLength: text.length
         }));
 
-        // Send chunks
+        // Send chunks with progress updates
         for (let i = 0; i < chunks; i++) {
           const chunk = text.slice(i * MAX_CHUNK_SIZE, (i + 1) * MAX_CHUNK_SIZE);
           dc.send(JSON.stringify({
@@ -755,6 +794,11 @@ export function usePeerConnection() {
             chunkIndex: i,
             chunk
           }));
+          
+          // Update progress
+          const progress = Math.round(((i + 1) / chunks) * 100);
+          setTransfer(prev => prev ? { ...prev, progress } : null);
+          
           // Small delay to prevent overwhelming the channel
           await new Promise(r => setTimeout(r, 10));
         }
@@ -775,29 +819,39 @@ export function usePeerConnection() {
         console.log('📤 Sent text message');
       }
       
-        setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
-        setTimeout(() => setTransfer(null), 3000);
+      setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
+      setTransferResult({
+        success: true,
+        fileName: 'ข้อความ/ลิงก์',
+        fileSize: textSize,
+        peerName: targetPeer.name,
+        direction: 'sent',
+        type: 'text',
+        textContent: text,
+      });
+      setTimeout(() => setTransfer(null), 3000);
 
-      } catch (err) {
-        console.error('❌ Text transfer error:', err);
-        
-        // Notify user of failure
-        setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
-        setTransferResult({
-          success: false,
-          fileName: 'ข้อความ/ลิงก์',
-          fileSize: 0,
-          peerName: targetPeer.name,
-        });
-        
-        // Clean up connection to force a fresh ICE restart next time
-        peerConnectionsRef.current.get(peerId)?.close();
-        peerConnectionsRef.current.delete(peerId);
-        dataChannelsRef.current.delete(peerId);
-        
-        setTimeout(() => setTransfer(null), 5000);
-      }
-    }, [createPeerConnection, setupDataChannel]);
+    } catch (err) {
+      console.error('❌ Text transfer error:', err);
+      
+      // Notify user of failure
+      setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
+      setTransferResult({
+        success: false,
+        fileName: 'ข้อความ/ลิงก์',
+        fileSize: textSize,
+        peerName: targetPeer.name,
+        direction: 'sent',
+      });
+      
+      // Clean up connection to force a fresh ICE restart next time
+      peerConnectionsRef.current.get(peerId)?.close();
+      peerConnectionsRef.current.delete(peerId);
+      dataChannelsRef.current.delete(peerId);
+      
+      setTimeout(() => setTransfer(null), 5000);
+    }
+  }, [createPeerConnection, setupDataChannel]);
 
   // Initialize socket connection
   useEffect(() => {

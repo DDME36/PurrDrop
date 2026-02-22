@@ -736,7 +736,7 @@ app.prepare().then(() => {
     });
   });
 
-  // Garbage Collection for empty rooms (runs every 1 hour)
+  // Garbage Collection for empty rooms (runs every 15 minutes)
   setInterval(() => {
     let deletedCount = 0;
     for (const [code, room] of rooms.entries()) {
@@ -748,7 +748,7 @@ app.prepare().then(() => {
     if (deletedCount > 0) {
       console.log(`🧹 Garbage Collection: Removed ${deletedCount} empty rooms`);
     }
-  }, 60 * 60 * 1000);
+  }, 15 * 60 * 1000); // Changed from 60 minutes to 15 minutes
 
   // Setup graceful shutdown for free tier platforms
   const gracefulShutdown = () => {

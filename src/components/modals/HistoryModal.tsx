@@ -85,6 +85,28 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
   const [showConfirm, setShowConfirm] = useState(false);
   const [viewingText, setViewingText] = useState<TransferRecord | null>(null);
 
+  // Fallback copy method for browsers without clipboard API
+  const fallbackCopy = (text: string, btn: HTMLButtonElement, originalHTML: string) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+      document.execCommand('copy');
+      btn.innerHTML = '✓';
+      setTimeout(() => btn.innerHTML = originalHTML, 1000);
+    } catch (err) {
+      console.error('Copy failed:', err);
+      btn.innerHTML = '✗';
+      setTimeout(() => btn.innerHTML = originalHTML, 1000);
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  };
+
   if (!show) return null;
 
   const handleClearClick = () => {
@@ -138,11 +160,24 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
                                 className="history-copy-btn"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigator.clipboard.writeText(record.textContent!);
                                   const btn = e.currentTarget;
                                   const original = btn.innerHTML;
-                                  btn.innerHTML = '✓';
-                                  setTimeout(() => btn.innerHTML = original, 1000);
+                                  
+                                  // Try modern clipboard API first
+                                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    navigator.clipboard.writeText(record.textContent!)
+                                      .then(() => {
+                                        btn.innerHTML = '✓';
+                                        setTimeout(() => btn.innerHTML = original, 1000);
+                                      })
+                                      .catch(() => {
+                                        // Fallback to textarea method
+                                        fallbackCopy(record.textContent!, btn, original);
+                                      });
+                                  } else {
+                                    // Fallback for older browsers
+                                    fallbackCopy(record.textContent!, btn, original);
+                                  }
                                 }}
                                 title="คัดลอก"
                               >
@@ -157,7 +192,24 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
                         {record.textContent && (
                           <div className="history-text-preview-container">
                             <div className="history-text-preview" title="คลิกเพื่ออ่านเต็ม">
-                              {record.textContent}
+                              {(() => {
+                                const lines = record.textContent.split('\n');
+                                const maxLines = 2;
+                                const maxCharsPerLine = 50;
+                                
+                                // Take first 2 lines
+                                let preview = lines.slice(0, maxLines).join('\n');
+                                
+                                // If there are more lines, add ellipsis
+                                if (lines.length > maxLines) {
+                                  preview += '...';
+                                } else if (preview.length > maxCharsPerLine * maxLines) {
+                                  // If total chars exceed limit, truncate
+                                  preview = preview.substring(0, maxCharsPerLine * maxLines) + '...';
+                                }
+                                
+                                return preview;
+                              })()}
                             </div>
                           </div>
                         )}

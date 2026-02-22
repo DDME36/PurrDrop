@@ -37,12 +37,50 @@ export function TextViewModal({ show, text, from, timestamp, onClose }: TextView
   if (!show) return null;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(text);
     const btn = document.activeElement as HTMLButtonElement;
-    if (btn) {
-      const original = btn.innerHTML;
-      btn.innerHTML = '<span style="color: inherit;">✓ คัดลอกแล้ว</span>';
-      setTimeout(() => btn.innerHTML = original, 2000);
+    const original = btn?.innerHTML || '';
+    
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          if (btn) {
+            btn.innerHTML = '<span style="color: inherit;">✓ คัดลอกแล้ว</span>';
+            setTimeout(() => btn.innerHTML = original, 2000);
+          }
+        })
+        .catch(() => {
+          // Fallback to textarea method
+          fallbackCopy(text, btn, original);
+        });
+    } else {
+      // Fallback for older browsers
+      fallbackCopy(text, btn, original);
+    }
+  };
+
+  const fallbackCopy = (text: string, btn: HTMLButtonElement | null, originalHTML: string) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+      document.execCommand('copy');
+      if (btn) {
+        btn.innerHTML = '<span style="color: inherit;">✓ คัดลอกแล้ว</span>';
+        setTimeout(() => btn.innerHTML = originalHTML, 2000);
+      }
+    } catch (err) {
+      console.error('Copy failed:', err);
+      if (btn) {
+        btn.innerHTML = '<span style="color: inherit;">✗ คัดลอกไม่สำเร็จ</span>';
+        setTimeout(() => btn.innerHTML = originalHTML, 2000);
+      }
+    } finally {
+      document.body.removeChild(textarea);
     }
   };
 
