@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { v4 as uuidv4 } from 'uuid';
+import { AdaptiveChunker } from '@/lib/adaptiveChunker';
 import { Peer, assignCritter, getDeviceName, generateCuteName } from '@/lib/critters';
 import { createStreamWriter, shouldUseStreaming, StreamWriter, FileTooLargeError } from '@/lib/streamSaver';
 
@@ -522,15 +523,17 @@ export function usePeerConnection() {
         mimeType: file.type || 'application/octet-stream',
       }));
 
-      // Send file chunks
-      const CHUNK_SIZE = 64 * 1024; // Optimized: 64KB chunks
+      // Send file chunks with adaptive sizing
+      const chunker = new AdaptiveChunker();
       const arrayBuffer = await file.arrayBuffer();
       let sent = 0;
 
       // Set backpressure threshold - browser fires 'bufferedamountlow' when buffer drops below this
       dc.bufferedAmountLowThreshold = 65536; // 64KB
 
-      for (let i = 0; i < arrayBuffer.byteLength; i += CHUNK_SIZE) {
+      for (let i = 0; i < arrayBuffer.byteLength; ) {
+        // Get adaptive chunk size based on current buffer state
+        const CHUNK_SIZE = chunker.adjustChunkSize(dc.bufferedAmount, dc.bufferedAmountLowThreshold);
         const chunk = arrayBuffer.slice(i, Math.min(i + CHUNK_SIZE, arrayBuffer.byteLength));
 
         // Intelligent Backpressure: Wait ONLY if buffer is full
@@ -577,6 +580,7 @@ export function usePeerConnection() {
 
         dc.send(chunk);
         sent += chunk.byteLength;
+        i += CHUNK_SIZE;
 
         // Update progress every few chunks to prevent React from lagging
         if (i % (CHUNK_SIZE * 10) === 0 || sent === arrayBuffer.byteLength) {

@@ -2,7 +2,7 @@ import { createServer } from "http";
 import { parse } from "url";
 import next from "next";
 import { Server as SocketIOServer, Socket } from "socket.io";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import {
   validatePeerData,
   sanitizeName,
@@ -49,13 +49,30 @@ const rooms = new Map<
   { peerIds: Set<string>; password: string | null }
 >();
 
-// Generate 5-digit room code
+// Generate 5-digit room code with crypto randomness
 function generateRoomCode(): string {
-  let code: string;
-  do {
-    code = Math.floor(10000 + Math.random() * 90000).toString();
-  } while (rooms.has(code) && rooms.get(code)!.peerIds.size > 0);
-  return code;
+  // Use crypto.randomBytes for better randomness
+  const bytes = randomBytes(3);
+  const num = bytes.readUIntBE(0, 3) % 90000 + 10000;
+  return num.toString();
+}
+
+// Generate unique room code with retry limit
+function generateUniqueRoomCode(maxRetries = 10): string {
+  for (let i = 0; i < maxRetries; i++) {
+    const code = generateRoomCode();
+    // Check if room exists AND has active peers
+    if (!rooms.has(code) || rooms.get(code)!.peerIds.size === 0) {
+      return code;
+    }
+  }
+  // Fallback: if all retries fail, throw error
+  throw new Error('Unable to generate unique room code. Server may be at capacity.');
+}
+
+// Hash password for secure storage
+function hashPassword(password: string): string {
+  return createHash('sha256').update(password).digest('hex');
 }
 
 // Get local IP address of server
@@ -443,6 +460,11 @@ app.prepare().then(() => {
               ? sanitizePassword(password)
               : null;
 
+            // Hash password if provided
+            const hashedPassword = sanitizedPassword
+              ? hashPassword(sanitizedPassword)
+              : null;
+
             // Joining existing room with code
             if (validatedCode) {
               const existingRoom = rooms.get(validatedCode);
@@ -472,7 +494,7 @@ app.prepare().then(() => {
 
               // Check password if room has password
               if (existingRoom.password) {
-                if (sanitizedPassword !== existingRoom.password) {
+                if (hashedPassword !== existingRoom.password) {
                   // Wrong password
                   console.log(
                     `${peer.name} failed to join room ${validatedCode} - wrong password`,
@@ -506,18 +528,38 @@ app.prepare().then(() => {
               );
             } else {
               // Create new room (no code provided = generate new)
-              const code = generateRoomCode();
-              peer.roomCode = code;
-              peer.roomPassword = sanitizedPassword;
+              try {
+                const code = generateUniqueRoomCode();
+                peer.roomCode = code;
+                peer.roomPassword = hashedPassword;
 
-              rooms.set(code, {
-                peerIds: new Set([peer.id]),
-                password: sanitizedPassword,
-              });
+                rooms.set(code, {
+                  peerIds: new Set([peer.id]),
+                  password: hashedPassword,
+                });
 
-              console.log(
-                `${peer.name} created room ${code}${sanitizedPassword ? " (password protected)" : ""}`,
-              );
+                console.log(
+                  `${peer.name} created room ${code}${hashedPassword ? " (password protected)" : ""}`,
+                );
+              } catch (err) {
+                console.error('Failed to generate room code:', err);
+                emitToPeer(io, peer, "room-error", {
+                  error: "room-generation-failed",
+                  message: "ไม่สามารถสร้างห้องได้ กรุณาลองใหม่อีกครั้ง",
+                });
+                // Revert to public mode
+                peer.mode = "public";
+                peer.roomCode = null;
+                peer.roomPassword = null;
+                emitToPeer(io, peer, "mode-info", {
+                  mode: "public",
+                  roomCode: null,
+                  roomPassword: null,
+                  networkName: peer.networkName,
+                });
+                broadcastPeers(io);
+                return;
+              }
             }
           } else {
             peer.roomCode = null;
