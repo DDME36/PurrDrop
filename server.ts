@@ -736,6 +736,20 @@ app.prepare().then(() => {
     });
   });
 
+  // Garbage Collection for empty rooms (runs every 1 hour)
+  setInterval(() => {
+    let deletedCount = 0;
+    for (const [code, room] of rooms.entries()) {
+      if (room.peerIds.size === 0) {
+        rooms.delete(code);
+        deletedCount++;
+      }
+    }
+    if (deletedCount > 0) {
+      console.log(`🧹 Garbage Collection: Removed ${deletedCount} empty rooms`);
+    }
+  }, 60 * 60 * 1000);
+
   // Setup graceful shutdown for free tier platforms
   const gracefulShutdown = () => {
     console.log("Shutting down gracefully...");

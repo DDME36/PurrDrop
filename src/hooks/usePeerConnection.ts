@@ -62,6 +62,11 @@ export function usePeerConnection() {
   const [transfer, setTransfer] = useState<TransferProgress | null>(null);
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
 
+  // Refs for tracking reconnection state across renders
+  const discoveryModeRef = useRef<DiscoveryMode>('public');
+  const roomCodeRef = useRef<string | null>(null);
+  const roomPasswordRef = useRef<string | null>(null);
+
   const socketRef = useRef<Socket | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const dataChannelsRef = useRef<Map<string, RTCDataChannel>>(new Map());
@@ -467,7 +472,6 @@ export function usePeerConnection() {
         });
       }
     };
-    };
 
     pc.ondatachannel = (e) => {
       console.log(`📥 Received DataChannel from ${peerId}`);
@@ -515,19 +519,37 @@ export function usePeerConnection() {
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Connection timeout')), 15000);
 
-        dc.onopen = () => {
+        const handleOpen = () => {
           clearTimeout(timeout);
           console.log('✅ DataChannel ready for sending');
+          clean();
           resolve();
         };
 
-        dc.onerror = () => {
+        const handleError = () => {
           clearTimeout(timeout);
+          clean();
           reject(new Error('DataChannel error'));
         };
+        
+        const handleClose = () => {
+          clearTimeout(timeout);
+          clean();
+          reject(new Error('DataChannel closed before open'));
+        };
+
+        const clean = () => {
+          dc.removeEventListener('open', handleOpen);
+          dc.removeEventListener('error', handleError);
+          dc.removeEventListener('close', handleClose);
+        };
+
+        dc.addEventListener('open', handleOpen);
+        dc.addEventListener('error', handleError);
+        dc.addEventListener('close', handleClose);
 
         if (dc.readyState === 'open') {
-          clearTimeout(timeout);
+          clean();
           resolve();
         }
       });
@@ -666,8 +688,9 @@ export function usePeerConnection() {
       const pc = peerConnectionsRef.current.get(peerId) || createPeerConnection(peerId);
       
       let dc = dataChannelsRef.current.get(peerId);
-      if (!dc || dc.readyState !== 'open') {
+      if (!dc || dc.readyState === 'closed' || dc.readyState === 'closing') {
         dc = pc.createDataChannel('text-transfer', { ordered: true });
+        dataChannelsRef.current.set(peerId, dc);
         setupDataChannel(dc, peerId);
         
         const offer = await pc.createOffer();
@@ -678,8 +701,22 @@ export function usePeerConnection() {
         
         await new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Connection timeout')), 15000); // Increased to 15s
-          dc!.onopen = () => { clearTimeout(timeout); resolve(); };
-          if (dc!.readyState === 'open') { clearTimeout(timeout); resolve(); }
+          
+          const handleOpen = () => { clearTimeout(timeout); clean(); resolve(); };
+          const handleClose = () => { clearTimeout(timeout); clean(); reject(new Error('DataChannel closed before open')); };
+          const handleError = () => { clearTimeout(timeout); clean(); reject(new Error('DataChannel error')); };
+          
+          const clean = () => {
+            dc!.removeEventListener('open', handleOpen);
+            dc!.removeEventListener('close', handleClose);
+            dc!.removeEventListener('error', handleError);
+          };
+          
+          dc!.addEventListener('open', handleOpen);
+          dc!.addEventListener('close', handleClose);
+          dc!.addEventListener('error', handleError);
+
+          if (dc!.readyState === 'open') { clearTimeout(timeout); clean(); resolve(); }
         });
       }
 
@@ -829,6 +866,16 @@ export function usePeerConnection() {
       setConnected(true);
       setConnectionStatus('connected');
       socket.emit('join', peer);
+      
+      // Restore previous mode if not public
+      if (discoveryModeRef.current !== 'public') {
+        console.log('🔄 Restoring previous mode state on reconnect:', discoveryModeRef.current);
+        socket.emit('set-mode', {
+          mode: discoveryModeRef.current,
+          roomCode: roomCodeRef.current,
+          password: roomPasswordRef.current
+        });
+      }
     });
 
     socket.on('reconnect_failed', () => {
@@ -852,6 +899,12 @@ export function usePeerConnection() {
       setDiscoveryMode(mode);
       setRoomCode(code);
       setRoomPassword(pwd);
+      
+      // Update refs for reconnection
+      discoveryModeRef.current = mode;
+      roomCodeRef.current = code;
+      roomPasswordRef.current = pwd;
+
       if (netName) setNetworkName(netName);
       setRoomError(null);
     });

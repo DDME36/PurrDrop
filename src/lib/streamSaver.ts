@@ -6,8 +6,9 @@ export interface StreamWriter {
   abort(): void;
 }
 
-// Memory limit for fallback writer (500MB)
-const MEMORY_WRITER_LIMIT = 500 * 1024 * 1024;
+// Fallback limits depending on device type
+const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const MEMORY_WRITER_LIMIT = isMobile ? 150 * 1024 * 1024 : 500 * 1024 * 1024;
 
 export function supportsFileSystemAccess(): boolean {
   // We now use StreamSaver which works across all modern browsers
@@ -20,6 +21,13 @@ export async function createFileSystemWriter(
   filename: string
 ): Promise<StreamWriter | null> {
   try {
+    // StreamSaver uses a Service Worker, which requires a secure context (HTTPS)
+    // Localhost is considered secure, but other IPs over HTTP are not.
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      console.warn('⚠️ StreamSaver requires HTTPS or localhost. Falling back to Memory Buffer.');
+      return null;
+    }
+
     // กำหนด Service Worker ของ StreamSaver (เพื่อรองรับ cross-origin if needed)
     // แต่ค่าเริ่มต้นมันจะไปใช้ของ jimmywarting.github.io ซึ่งโอเคสำหรับ P2P เบื้องต้น
     // ถ้าเรามี mitm.html ของเราเองก็ปรับได้ แต่ตัว default เสถียรสุดครัช
