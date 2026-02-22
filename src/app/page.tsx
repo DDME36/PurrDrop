@@ -27,6 +27,7 @@ import { useSound } from '@/hooks/useSound';
 import { usePeerConnection } from '@/hooks/usePeerConnection';
 import { useTheme } from '@/hooks/useTheme';
 import { useNotification } from '@/hooks/useNotification';
+import { Peer } from '@/lib/critters';
 import { createZipFile, FileWithContext } from '@/lib/compression';
 import { getHistory, addToHistory, TransferRecord } from '@/lib/transferHistory';
 
