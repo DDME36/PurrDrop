@@ -159,15 +159,6 @@ export default function Home() {
     prevPeerIdsRef.current = currentIds;
   }, [peers, play, notifyPeerJoined]);
 
-    if (newIds.size > 0) {
-      setNewPeerIds(newIds);
-      play('connect');
-      setTimeout(() => setNewPeerIds(new Set()), 1000);
-    }
-
-    prevPeerIdsRef.current = currentIds;
-  }, [peers, play, notifyPeerJoined]);
-
   // Register service worker for PWA
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
