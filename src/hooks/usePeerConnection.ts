@@ -684,6 +684,18 @@ export function usePeerConnection() {
 
   const sendTextViaWebRTC = useCallback(async (peerId: string, text: string, targetPeer: Peer) => {
     console.log(`📤 Starting Text transfer to ${peerId}`);
+    
+    // Set pending UI state to inform user we are trying to connect
+    setTransferResult(null);
+    setTransfer({
+      peerId,
+      peerName: targetPeer.name,
+      fileName: 'กำลังส่งข้อความ...',
+      fileSize: new Blob([text]).size,
+      progress: 0,
+      status: 'sending',
+    });
+
     try {
       const pc = peerConnectionsRef.current.get(peerId) || createPeerConnection(peerId);
       
@@ -763,24 +775,29 @@ export function usePeerConnection() {
         console.log('📤 Sent text message');
       }
       
-      // Temporary transfer success spoof for history
-      setTransferResult({
-        success: true,
-        fileName: 'ข้อความ/ลิงก์',
-        fileSize: new Blob([text]).size,
-        peerName: targetPeer.name,
-      });
+        setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
+        setTimeout(() => setTransfer(null), 3000);
 
-    } catch (err) {
-      console.error('❌ Text transfer error:', err);
-      setTransferResult({
-        success: false,
-        fileName: 'ข้อความ/ลิงก์',
-        fileSize: 0,
-        peerName: targetPeer.name,
-      });
-    }
-  }, [createPeerConnection, setupDataChannel]);
+      } catch (err) {
+        console.error('❌ Text transfer error:', err);
+        
+        // Notify user of failure
+        setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
+        setTransferResult({
+          success: false,
+          fileName: 'ข้อความ/ลิงก์',
+          fileSize: 0,
+          peerName: targetPeer.name,
+        });
+        
+        // Clean up connection to force a fresh ICE restart next time
+        peerConnectionsRef.current.get(peerId)?.close();
+        peerConnectionsRef.current.delete(peerId);
+        dataChannelsRef.current.delete(peerId);
+        
+        setTimeout(() => setTransfer(null), 5000);
+      }
+    }, [createPeerConnection, setupDataChannel]);
 
   // Initialize socket connection
   useEffect(() => {

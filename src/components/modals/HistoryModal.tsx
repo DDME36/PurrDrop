@@ -119,50 +119,76 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
                 <p>ยังไม่มีประวัติ</p>
               </div>
             ) : (
-              history.map(record => (
-                <div key={record.id} className={`history-item ${record.direction} ${record.type === 'text' ? 'text-message' : ''}`}>
-                  <div className="history-icon">
-                    {record.type === 'text' ? (
-                      <MessageSquareIcon />
-                    ) : (
-                      record.direction === 'sent' ? <UploadIcon /> : <DownloadIcon />
-                    )}
-                  </div>
-                  <div className="history-info" onClick={() => handleTextClick(record)} style={{ cursor: record.type === 'text' ? 'pointer' : 'default' }}>
-                    <div className="history-filename">{record.fileName}</div>
-                    {record.type === 'text' && record.textContent && (
-                      <div className="history-text-preview" title="คลิกเพื่ออ่านเต็ม">
-                        {record.textContent.length > 100 ? record.textContent.slice(0, 100) + '...' : record.textContent}
+              history.map(record => {
+                if (record.type === 'text' || record.textContent || record.fileName === 'ข้อความ/ลิงก์') {
+                  return (
+                    <div key={record.id} className={`history-item text-message-card ${record.direction}`}>
+                      <div className="history-icon">
+                        <MessageSquareIcon />
                       </div>
-                    )}
-                    <div className="history-meta">
-                      <span>{formatFileSize(record.fileSize)}</span>
-                      <span>•</span>
-                      <span>{record.direction === 'sent' ? `ส่งให้ ${record.peerName}` : `จาก ${record.peerName}`}</span>
+                      <div className="history-info" onClick={() => handleTextClick(record)} style={{ cursor: 'pointer' }}>
+                        <div className="text-message-header">
+                          <span className="text-message-sender">
+                            {record.direction === 'sent' ? `ส่งให้ ${record.peerName}` : `จาก ${record.peerName}`}
+                          </span>
+                          <div className="text-message-actions">
+                            <span className="history-time">{formatTime(record.timestamp)}</span>
+                            {record.textContent && (
+                              <button 
+                                className="history-copy-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(record.textContent!);
+                                  const btn = e.currentTarget;
+                                  const original = btn.innerHTML;
+                                  btn.innerHTML = '✓';
+                                  setTimeout(() => btn.innerHTML = original, 1000);
+                                }}
+                                title="คัดลอก"
+                              >
+                                <ClipboardListIcon />
+                              </button>
+                            )}
+                            <div className={`history-status ${record.success ? 'success' : 'failed'}`}>
+                              {record.success ? <CheckSmallIcon /> : <XSmallIcon />}
+                            </div>
+                          </div>
+                        </div>
+                        {record.textContent && (
+                          <div className="history-text-preview-container">
+                            <div className="history-text-preview" title="คลิกเพื่ออ่านเต็ม">
+                              {record.textContent}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Default layout for file transfers
+                return (
+                  <div key={record.id} className={`history-item ${record.direction}`}>
+                    <div className="history-icon">
+                      {record.direction === 'sent' ? <UploadIcon /> : <DownloadIcon />}
+                    </div>
+                    <div className="history-info">
+                      <div className="history-filename">
+                        <span className="history-filename-text">{record.fileName}</span>
+                      </div>
+                      <div className="history-meta">
+                        <span>{formatFileSize(record.fileSize)}</span>
+                        <span>•</span>
+                        <span>{record.direction === 'sent' ? `ส่งให้ ${record.peerName}` : `จาก ${record.peerName}`}</span>
+                      </div>
+                    </div>
+                    <div className="history-time">{formatTime(record.timestamp)}</div>
+                    <div className={`history-status ${record.success ? 'success' : 'failed'}`}>
+                      {record.success ? <CheckSmallIcon /> : <XSmallIcon />}
                     </div>
                   </div>
-                  <div className="history-time">{formatTime(record.timestamp)}</div>
-                  {record.type === 'text' && record.textContent && (
-                    <button 
-                      className="history-copy-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(record.textContent!);
-                        const btn = e.currentTarget;
-                        const original = btn.innerHTML;
-                        btn.innerHTML = '✓';
-                        setTimeout(() => btn.innerHTML = original, 1000);
-                      }}
-                      title="คัดลอก"
-                    >
-                      <ClipboardListIcon />
-                    </button>
-                  )}
-                  <div className={`history-status ${record.success ? 'success' : 'failed'}`}>
-                    {record.success ? <CheckSmallIcon /> : <XSmallIcon />}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

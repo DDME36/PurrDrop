@@ -41,7 +41,7 @@ export function TextViewModal({ show, text, from, timestamp, onClose }: TextView
     const btn = document.activeElement as HTMLButtonElement;
     if (btn) {
       const original = btn.innerHTML;
-      btn.innerHTML = '<span style="color: white;">✓ คัดลอกแล้ว</span>';
+      btn.innerHTML = '<span style="color: inherit;">✓ คัดลอกแล้ว</span>';
       setTimeout(() => btn.innerHTML = original, 2000);
     }
   };
