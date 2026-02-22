@@ -403,19 +403,29 @@ export function usePeerConnection() {
       iceServers: iceServersRef.current.length > 0 ? iceServersRef.current : [
         // Fallback STUN servers if API fails
         { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
       ],
       iceCandidatePoolSize: 10, // Pre-fetch candidates for faster connection
+      iceTransportPolicy: 'all', // Try all routes (relay, srflx, host)
+      bundlePolicy: 'max-bundle', // Bundle all media on single transport
+      rtcpMuxPolicy: 'require', // Multiplex RTP and RTCP
     });
 
     pc.onicecandidate = (e) => {
       if (e.candidate && socketRef.current) {
-        console.log('🧊 Sending ICE candidate');
+        console.log('🧊 Sending ICE candidate:', e.candidate.type);
         socketRef.current.emit('rtc-ice', { to: peerId, candidate: e.candidate });
+      } else if (!e.candidate) {
+        console.log('🧊 ICE gathering complete');
       }
     };
 
+    pc.onicegatheringstatechange = () => {
+      console.log(`🧊 ICE gathering state: ${pc.iceGatheringState}`);
+    };
+
     pc.oniceconnectionstatechange = () => {
-      console.log(`🧊 ICE state: ${pc.iceConnectionState}`);
+      console.log(`🧊 ICE connection state: ${pc.iceConnectionState}`);
 
       // Log connection type when connected and update transfer state
       if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
@@ -448,6 +458,15 @@ export function usePeerConnection() {
           });
         });
       }
+      
+      // Log failed state for debugging
+      if (pc.iceConnectionState === 'failed') {
+        console.error('❌ ICE connection failed - NAT traversal unsuccessful');
+        pc.getStats().then(stats => {
+          console.log('📊 Connection stats:', Array.from(stats.values()));
+        });
+      }
+    };
     };
 
     pc.ondatachannel = (e) => {
