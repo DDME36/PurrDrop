@@ -658,7 +658,7 @@ export function usePeerConnection() {
         socketRef.current.emit('rtc-offer', { to: peerId, offer });
         
         await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Connection timeout')), 5000);
+          const timeout = setTimeout(() => reject(new Error('Connection timeout')), 15000); // Increased to 15s
           dc!.onopen = () => { clearTimeout(timeout); resolve(); };
           if (dc!.readyState === 'open') { clearTimeout(timeout); resolve(); }
         });

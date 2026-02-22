@@ -159,6 +159,15 @@ export default function Home() {
     prevPeerIdsRef.current = currentIds;
   }, [peers, play, notifyPeerJoined]);
 
+    if (newIds.size > 0) {
+      setNewPeerIds(newIds);
+      play('connect');
+      setTimeout(() => setNewPeerIds(new Set()), 1000);
+    }
+
+    prevPeerIdsRef.current = currentIds;
+  }, [peers, play, notifyPeerJoined]);
+
   // Register service worker for PWA
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
@@ -188,7 +197,17 @@ export default function Home() {
   useEffect(() => {
     if (textMessage) {
       play('success');
-      toastRef.current?.show(`ข้อความจาก ${textMessage.from.name}: ${textMessage.text}`, 'success');
+      
+      // Show notification
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('ข้อความใหม่จาก ' + textMessage.from.name, {
+          body: textMessage.text.slice(0, 100) + (textMessage.text.length > 100 ? '...' : ''),
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+        });
+      }
+      
+      toastRef.current?.show(`ข้อความจาก ${textMessage.from.name}: ${textMessage.text.slice(0, 50)}${textMessage.text.length > 50 ? '...' : ''}`, 'success');
       
       // Add to history with text content
       addToHistory({
