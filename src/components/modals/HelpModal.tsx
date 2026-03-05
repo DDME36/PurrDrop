@@ -2,16 +2,16 @@
 
 import { useState } from 'react';
 
-// Lucide Icons
+// SVG Icons
 const SmartphoneIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-pink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
     <path d="M12 18h.01" />
   </svg>
 );
 
 const RefreshCwIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-mint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
     <path d="M21 3v5h-5" />
     <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
@@ -20,7 +20,7 @@ const RefreshCwIcon = () => (
 );
 
 const PointerIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M22 14a8 8 0 0 1-8 8" />
     <path d="M18 11v-1a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
     <path d="M14 10V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1" />
@@ -30,7 +30,7 @@ const PointerIcon = () => (
 );
 
 const GiftIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-lavender)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="8" width="18" height="4" rx="1" />
     <path d="M12 8v13" />
     <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
@@ -39,7 +39,7 @@ const GiftIcon = () => (
 );
 
 const FileTextIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-lavender)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
     <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
     <path d="M10 9H8"/>
@@ -49,7 +49,7 @@ const FileTextIcon = () => (
 );
 
 const HistoryIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-mint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
     <path d="M12 11h4"/>
@@ -59,11 +59,16 @@ const HistoryIcon = () => (
   </svg>
 );
 
-const AlertCircleIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="M12 8v4"/>
-    <path d="M12 16h.01"/>
+const ChevronDownIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m6 9 6 6 6-6"/>
+  </svg>
+);
+
+const XIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18"/>
+    <path d="m6 6 12 12"/>
   </svg>
 );
 
@@ -71,6 +76,21 @@ interface HelpModalProps {
   show: boolean;
   onClose: () => void;
 }
+
+function FAQItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`faq-item ${open ? 'open' : ''}`}>
+      <button className="faq-question" onClick={() => setOpen(!open)}>
+        <span>{question}</span>
+        <span className={`faq-chevron ${open ? 'rotated' : ''}`}><ChevronDownIcon /></span>
+      </button>
+      {open && <div className="faq-answer">{answer}</div>}
+    </div>
+  );
+}
+
+const STEP_COLORS = ['var(--accent-pink)', 'var(--accent-mint)', 'var(--accent-peach)', 'var(--accent-lavender)'];
 
 export function HelpModal({ show, onClose }: HelpModalProps) {
   const [activeTab, setActiveTab] = useState<'basic' | 'text' | 'history' | 'troubleshoot'>('basic');
@@ -80,7 +100,10 @@ export function HelpModal({ show, onClose }: HelpModalProps) {
   return (
     <div className="modal show" onClick={onClose}>
       <div className="modal-content modal-help" onClick={e => e.stopPropagation()}>
-        <div className="modal-title">วิธีใช้งาน</div>
+        <div className="modal-header">
+          <h3 className="modal-title">วิธีใช้งาน</h3>
+          <button className="modal-close" onClick={onClose}><XIcon /></button>
+        </div>
         
         <div className="help-tabs">
           <button 
@@ -112,23 +135,26 @@ export function HelpModal({ show, onClose }: HelpModalProps) {
         <div className="help-content">
           {activeTab === 'basic' && (
             <div className="help-steps">
+              <div className="help-subtitle">ง่ายๆ 4 ขั้นตอน</div>
               <div className="help-step">
+                <div className="step-badge" style={{ background: STEP_COLORS[0] }}>1</div>
                 <div className="step-icon"><SmartphoneIcon /></div>
                 <div className="step-text">เปิด PurrDrop ในอุปกรณ์อื่น</div>
               </div>
               <div className="help-step">
+                <div className="step-badge" style={{ background: STEP_COLORS[1] }}>2</div>
                 <div className="step-icon"><RefreshCwIcon /></div>
-                <div className="step-text">
-                  เลือกโหมดเดียวกัน (สาธารณะ / WiFi / ส่วนตัว)
-                </div>
+                <div className="step-text">เลือกโหมดเดียวกัน<br/><small>สาธารณะ / WiFi / ส่วนตัว</small></div>
               </div>
               <div className="help-step">
+                <div className="step-badge" style={{ background: STEP_COLORS[2] }}>3</div>
                 <div className="step-icon"><PointerIcon /></div>
-                <div className="step-text">คลิกที่เพื่อน → เลือกไฟล์ (หรือลากไฟล์มาวาง)</div>
+                <div className="step-text">คลิกที่เพื่อน → เลือกไฟล์<br/><small>หรือลากไฟล์มาวางก็ได้</small></div>
               </div>
               <div className="help-step">
+                <div className="step-badge" style={{ background: STEP_COLORS[3] }}>4</div>
                 <div className="step-icon"><GiftIcon /></div>
-                <div className="step-text">เพื่อนกด "รับเลย!" → ไฟล์ส่งผ่าน P2P</div>
+                <div className="step-text">เพื่อนกด &quot;รับเลย!&quot; → ส่งผ่าน P2P</div>
               </div>
             </div>
           )}
@@ -136,11 +162,18 @@ export function HelpModal({ show, onClose }: HelpModalProps) {
           {activeTab === 'text' && (
             <div className="help-steps">
               <div className="help-step">
+                <div className="step-badge" style={{ background: STEP_COLORS[3] }}>1</div>
                 <div className="step-icon"><FileTextIcon /></div>
                 <div className="step-text">
-                  กดปุ่ม 📄 (มุมล่างขวา) → พิมพ์ข้อความ → เลือกเพื่อน → ส่ง
-                  <br /><br />
-                  <small>รองรับข้อความยาว, URL, และข้อความหลายบรรทัด</small>
+                  กดปุ่มข้อความ (มุมล่างขวา)
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="step-badge" style={{ background: STEP_COLORS[1] }}>2</div>
+                <div className="step-icon"><PointerIcon /></div>
+                <div className="step-text">
+                  พิมพ์ข้อความ → เลือกเพื่อน → ส่ง
+                  <br/><small>รองรับ URL, ข้อความยาว, และหลายบรรทัด</small>
                 </div>
               </div>
             </div>
@@ -149,10 +182,12 @@ export function HelpModal({ show, onClose }: HelpModalProps) {
           {activeTab === 'history' && (
             <div className="help-steps">
               <div className="help-step">
-                <div className="step-icon"><HistoryIcon /></div>
+                <div className="step-badge" style={{ background: STEP_COLORS[1] }}>
+                  <HistoryIcon />
+                </div>
                 <div className="step-text">
-                  กดไอคอน 📋 (มุมขวาบน) → ดูไฟล์และข้อความที่ส่ง/รับ
-                  <br /><br />
+                  กดไอคอนนาฬิกา (มุมขวาบน) → ดูไฟล์และข้อความที่ส่ง/รับ
+                  <br/><br/>
                   <small>คลิกที่ข้อความเพื่ออ่านเต็ม หรือกดปุ่มคัดลอก</small>
                 </div>
               </div>
@@ -160,19 +195,27 @@ export function HelpModal({ show, onClose }: HelpModalProps) {
           )}
 
           {activeTab === 'troubleshoot' && (
-            <div className="help-steps">
-              <div className="help-step">
-                <div className="step-icon"><AlertCircleIcon /></div>
-                <div className="step-text">
-                  <strong>ไม่เห็นเพื่อน:</strong> ลอง refresh หน้าเว็บทั้งสองเครื่อง
-                  <br /><br />
-                  <strong>ส่งไฟล์ไม่ได้:</strong> ตรวจสอบว่าอยู่โหมดเดียวกัน
-                  <br /><br />
-                  <strong>ข้าม Network:</strong> ใช้โหมดส่วนตัว (Private)
-                  <br /><br />
-                  <strong>VPN:</strong> ปิด VPN หรือใช้โหมดส่วนตัว
-                </div>
-              </div>
+            <div className="help-faq">
+              <FAQItem 
+                question="ไม่เห็นเพื่อน"
+                answer="ลอง refresh หน้าเว็บทั้งสองเครื่อง และตรวจสอบว่าอยู่โหมดเดียวกัน"
+              />
+              <FAQItem 
+                question="ส่งไฟล์ไม่ได้"
+                answer="ตรวจสอบว่าทั้งสองเครื่องอยู่โหมดเดียวกัน เช่น สาธารณะทั้งคู่ หรือ WiFi ทั้งคู่"
+              />
+              <FAQItem 
+                question="อยู่คนละ Network"
+                answer="ใช้โหมดส่วนตัว (Private) → สร้างห้อง → แชร์รหัสห้องให้เพื่อน"
+              />
+              <FAQItem 
+                question="ใช้ VPN อยู่"
+                answer="ปิด VPN แล้วลองใหม่ หรือใช้โหมดส่วนตัว (Private) แทน"
+              />
+              <FAQItem 
+                question="ไฟล์ใหญ่ส่งช้า"
+                answer="ไฟล์ส่งแบบ P2P โดยตรง ความเร็วขึ้นกับ internet ทั้งสองฝั่ง ลอง WiFi เดียวกันจะเร็วที่สุด"
+              />
             </div>
           )}
         </div>

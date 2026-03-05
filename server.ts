@@ -327,16 +327,25 @@ app.prepare().then(() => {
     }
   });
 
+  // Default allowed origins for production (Render)
+  const defaultOrigins = [
+    "https://purrdrop.onrender.com",
+    "https://purrdrop.com",
+  ];
+
   const io = new SocketIOServer(httpServer, {
     cors: {
       origin:
         process.env.NODE_ENV === "production"
-          ? process.env.ALLOWED_ORIGINS?.split(",") || false
+          ? process.env.ALLOWED_ORIGINS?.split(",") || defaultOrigins
           : "*",
       methods: ["GET", "POST"],
       credentials: true,
     },
     transports: ["websocket", "polling"],
+    // Performance: increase ping interval for free tier
+    pingInterval: 25000,
+    pingTimeout: 20000,
   });
 
   io.on("connection", (socket: Socket) => {

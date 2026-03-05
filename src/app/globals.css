@@ -920,22 +920,27 @@ body {
   left: 50%;
   transform: translateX(-50%);
   font-size: 100px;
-  animation: critterWave 2.5s ease-in-out infinite;
+  animation: critterFloat 5s ease-in-out infinite;
   filter: drop-shadow(0 10px 20px rgba(255, 179, 209, 0.4));
+  will-change: transform, filter;
 }
 
-@keyframes critterWave {
-  0%,
-  100% {
-    transform: translateX(-50%) rotate(0deg) scale(1);
+@keyframes critterFloat {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0) rotate(0deg) scale(1);
+    filter: drop-shadow(0 10px 20px rgba(255, 179, 209, 0.4));
   }
-
   25% {
-    transform: translateX(-50%) rotate(-10deg) scale(1.03);
+    transform: translateX(-50%) translateY(-8px) rotate(-4deg) scale(1.02);
+    filter: drop-shadow(0 14px 25px rgba(255, 179, 209, 0.5));
   }
-
+  50% {
+    transform: translateX(-50%) translateY(-3px) rotate(0deg) scale(1);
+    filter: drop-shadow(0 12px 22px rgba(255, 179, 209, 0.45));
+  }
   75% {
-    transform: translateX(-50%) rotate(10deg) scale(1.03);
+    transform: translateX(-50%) translateY(-6px) rotate(4deg) scale(1.02);
+    filter: drop-shadow(0 14px 25px rgba(255, 179, 209, 0.5));
   }
 }
 
@@ -947,6 +952,7 @@ body {
   margin-bottom: 8px;
   background: linear-gradient(135deg, var(--text-primary), var(--accent-pink));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -1571,6 +1577,9 @@ body {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   animation: cardSlideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Prevent layout jitter during progress updates */
+  contain: layout style;
+  transform: translateZ(0);
 }
 
 .transfer-card.card-closing {
@@ -1844,8 +1853,10 @@ body {
 .transfer-progress-fill {
   height: 100%;
   border-radius: 6px;
-  transition: width 0.15s ease-out;
+  transition: width 0.3s ease-out;
   box-shadow: 0 2px 8px rgba(168, 230, 207, 0.5);
+  will-change: width;
+  transform: translateZ(0);
 }
 
 .transfer-progress-glow {
@@ -1860,6 +1871,8 @@ body {
     0 0 20px var(--accent-mint),
     0 0 40px var(--accent-pink);
   animation: glowPulse 1s ease-in-out infinite;
+  will-change: opacity, box-shadow;
+  contain: strict;
 }
 
 /* Hide glow in dark mode */
@@ -2229,6 +2242,7 @@ body {
   color: var(--text-primary);
   background: linear-gradient(135deg, var(--text-primary), var(--accent-pink));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   display: flex;
   align-items: center;
@@ -2356,45 +2370,99 @@ body {
 }
 
 .modal-help {
-  max-width: 500px;
+  max-width: 460px;
   max-height: 85vh;
   overflow-y: auto;
+  padding: 28px 24px !important;
+}
+
+.modal-help .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modal-help .modal-header .modal-title {
+  margin-bottom: 0;
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: rgba(255, 107, 157, 0.15);
+  color: var(--accent-pink);
+}
+
+[data-theme="dark"] .modal-close {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .modal-close:hover {
+  background: rgba(255, 107, 157, 0.2);
 }
 
 .help-tabs {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 20px;
-  border-bottom: 2px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  padding: 4px;
+  border-bottom: none;
+}
+
+[data-theme="dark"] .help-tabs {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .help-tab {
   flex: 1;
-  padding: 10px 16px;
+  padding: 8px 12px;
   background: transparent;
   border: none;
-  border-bottom: 3px solid transparent;
+  border-bottom: none;
+  border-radius: 10px;
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: -2px;
+  transition: all 0.25s ease;
+  margin-bottom: 0;
 }
 
 .help-tab:hover {
   color: var(--text-primary);
-  background: rgba(255, 179, 209, 0.05);
+  background: rgba(255, 179, 209, 0.08);
 }
 
 .help-tab.active {
   color: var(--accent-pink);
-  border-bottom-color: var(--accent-pink);
+  background: var(--bg-card);
+  border-bottom-color: transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .help-tab.active {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .help-content {
-  min-height: 200px;
+  min-height: 180px;
 }
 
 .help-section {
@@ -2435,58 +2503,72 @@ body {
 .help-steps {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 12px 0;
+  gap: 10px;
+  margin: 8px 0;
+  position: relative;
 }
-
+/* Step badges already provide visual flow, no connector line needed */
 .help-step {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   text-align: left;
-  padding: 14px;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 179, 209, 0.1),
-    rgba(168, 230, 207, 0.1)
-  );
-  border-radius: var(--radius-sm);
-  border: 2px solid transparent;
-  transition: all 0.3s ease;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  transition: all 0.25s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .help-step:hover {
-  border-color: var(--accent-pink);
-  transform: translateX(5px);
+  border-color: rgba(255, 179, 209, 0.3);
+  transform: translateX(4px);
+  box-shadow: 0 4px 16px rgba(255, 179, 209, 0.12);
+}
+
+[data-theme="dark"] .help-step:hover {
+  border-color: rgba(255, 107, 157, 0.3);
+  box-shadow: 0 4px 16px rgba(255, 107, 157, 0.08);
 }
 
 .step-icon {
-  font-size: 36px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   background: linear-gradient(
     135deg,
-    rgba(255, 179, 209, 0.2),
-    rgba(168, 230, 207, 0.2)
+    rgba(255, 179, 209, 0.15),
+    rgba(168, 230, 207, 0.15)
   );
   border-radius: 12px;
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .step-icon {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 107, 157, 0.15),
+    rgba(107, 207, 159, 0.15)
+  );
 }
 
 .step-text {
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--text-primary);
   line-height: 1.5;
+  flex: 1;
 }
 
 .step-text small {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-secondary);
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .step-text small svg {
@@ -3045,7 +3127,8 @@ body {
 
 /* Name Modal - Keyboard aware */
 .modal-keyboard-aware {
-  /* Default: centered like other modals */
+  /* Centered like other modals - placeholder for future keyboard-aware adjustments */
+  position: relative;
 }
 
 .modal-input-modal {
@@ -3098,7 +3181,7 @@ body {
   .modal-keyboard-aware {
     padding-top: 10vh;
   }
-  
+
   .modal-input-modal {
     max-width: 280px;
   }
@@ -3459,7 +3542,7 @@ body {
     max-height: 70vh;
     width: 100%;
   }
-  
+
   .text-view-content {
     max-height: 50vh;
     padding: 16px;
@@ -3473,7 +3556,7 @@ body {
     max-height: 70vh;
     width: 100%;
   }
-  
+
   .text-view-content {
     max-height: 50vh;
     padding: 16px;
@@ -4907,6 +4990,159 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* QR Click to Expand */
+.qr-clickable {
+  cursor: pointer;
+  position: relative;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.qr-clickable:hover {
+  transform: scale(1.03);
+  box-shadow: 0 12px 40px rgba(255, 179, 209, 0.3);
+}
+
+.qr-clickable:active {
+  transform: scale(0.98);
+}
+
+.qr-zoom-hint {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 3px 8px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.qr-clickable:hover .qr-zoom-hint {
+  opacity: 1;
+}
+
+/* QR Zoom Overlay - Fullscreen */
+.qr-zoom-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: qrZoomFadeIn 0.3s ease;
+  cursor: pointer;
+}
+
+@keyframes qrZoomFadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+  }
+}
+
+.qr-zoom-card {
+  background: white;
+  border-radius: 24px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+  animation: qrZoomScaleIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+  max-width: calc(100vw - 40px);
+}
+
+[data-theme="dark"] .qr-zoom-card {
+  background: #252542;
+}
+
+@keyframes qrZoomScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.qr-zoom-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.qr-zoom-canvas {
+  background: white;
+  padding: 16px;
+  border-radius: 16px;
+  border: 3px solid var(--accent-pink);
+  box-shadow: 0 8px 30px rgba(255, 179, 209, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-theme="dark"] .qr-zoom-canvas {
+  background: white;
+}
+
+.qr-zoom-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  background: rgba(255, 179, 209, 0.1);
+  border-radius: 50px;
+}
+
+.qr-zoom-mode svg {
+  width: 16px;
+  height: 16px;
+  stroke: var(--accent-pink);
+}
+
+.qr-zoom-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  padding: 8px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.qr-zoom-close:hover {
+  opacity: 1;
+}
+
 /* Feedback Attachments */
 .feedback-attachments {
   margin-bottom: 20px;
@@ -5180,9 +5416,9 @@ body {
 /* --- New UI Improvements --- */
 
 /* User Identity Badges (Emoji + Name Pill) */
-.peer-badge, 
-.peer-select-item, 
-.success-user, 
+.peer-badge,
+.peer-select-item,
+.success-user,
 .modal-sender {
   display: inline-flex !important;
   align-items: center !important;
@@ -5200,9 +5436,9 @@ body {
   cursor: default;
 }
 
-[data-theme="dark"] .peer-badge, 
-[data-theme="dark"] .peer-select-item, 
-[data-theme="dark"] .success-user, 
+[data-theme="dark"] .peer-badge,
+[data-theme="dark"] .peer-select-item,
+[data-theme="dark"] .success-user,
 [data-theme="dark"] .modal-sender {
   background: rgba(255, 255, 255, 0.1) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
@@ -5214,8 +5450,8 @@ button.peer-select-item {
   justify-content: center !important;
 }
 
-.peer-badge:hover, 
-button.peer-select-item:hover, 
+.peer-badge:hover,
+button.peer-select-item:hover,
 .success-user:hover {
   transform: translateY(-2px) !important;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1) !important;
@@ -5231,7 +5467,9 @@ button.peer-select-item.selected {
   box-shadow: 0 4px 16px rgba(255, 179, 209, 0.3) !important;
 }
 
-.peer-emoji, .peer-badge-emoji, .user-avatar {
+.peer-emoji,
+.peer-badge-emoji,
+.user-avatar {
   font-size: 20px !important;
   display: flex !important;
   align-items: center !important;
@@ -5242,7 +5480,10 @@ button.peer-select-item.selected {
   line-height: 1 !important;
 }
 
-.peer-name, .peer-badge-name, .user-label, .peer-name-text {
+.peer-name,
+.peer-badge-name,
+.user-label,
+.peer-name-text {
   display: flex !important;
   align-items: center !important;
   line-height: 28px !important;
@@ -5296,3 +5537,531 @@ button.peer-select-item.selected {
   }
 }
 
+/* =============================================
+   UI Polish & Enhancements
+   ============================================= */
+
+/* Logo Mascot */
+.logo-mascot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: mascotBounce 3s ease-in-out infinite;
+  filter: drop-shadow(0 2px 6px rgba(255, 179, 209, 0.4));
+  margin-right: 4px;
+}
+
+@keyframes mascotBounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-3px) rotate(-5deg);
+  }
+  75% {
+    transform: translateY(-2px) rotate(5deg);
+  }
+}
+
+[data-theme="dark"] .logo-mascot {
+  filter: drop-shadow(0 2px 8px rgba(255, 107, 157, 0.4));
+}
+
+/* Enhanced Header Buttons */
+.btn-icon-header {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btn-icon-header:hover {
+  transform: scale(1.15) translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 179, 209, 0.4);
+}
+
+.btn-icon-header:active {
+  transform: scale(0.92);
+  transition-duration: 0.1s;
+}
+
+[data-theme="dark"] .btn-icon-header:hover {
+  box-shadow: 0 6px 20px rgba(255, 107, 157, 0.3);
+}
+
+/* Status Dot - Re-enabled pulse with refined animation */
+.status-dot.connected {
+  animation: statusPulseSmooth 2.5s ease-in-out infinite;
+}
+
+@keyframes statusPulseSmooth {
+  0%,
+  100% {
+    box-shadow: 0 0 6px var(--accent-mint);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 14px var(--accent-mint),
+      0 0 20px var(--accent-mint);
+    transform: scale(1.15);
+  }
+}
+
+/* Enhanced Peer Card Hover - Bouncy spring with glow */
+.peer-card {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.peer-card:hover {
+  transform: translateY(-10px) scale(1.04);
+  box-shadow:
+    0 16px 40px rgba(255, 179, 209, 0.3),
+    0 0 0 2px var(--accent-pink),
+    0 0 30px rgba(255, 179, 209, 0.15);
+}
+
+[data-theme="dark"] .peer-card:hover {
+  box-shadow:
+    0 16px 40px rgba(255, 107, 157, 0.15),
+    0 0 0 2px var(--accent-pink),
+    0 0 30px rgba(255, 107, 157, 0.1);
+}
+
+.peer-card:active {
+  transform: translateY(-4px) scale(0.98);
+  transition-duration: 0.15s;
+}
+
+/* Better Peer Card entrance */
+.peer-card.entering {
+  animation: cardEnterBouncy 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes cardEnterBouncy {
+  from {
+    opacity: 0;
+    transform: scale(0.4) translateY(50px) rotate(-8deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06) translateY(-5px) rotate(2deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0) rotate(0deg);
+  }
+}
+
+/* Heart float SVG animation */
+.heart-float svg {
+  animation: heartPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes heartPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.9;
+  }
+}
+
+/* Enhanced My Critter Bar */
+.my-critter-bar {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.my-critter-bar:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(255, 179, 209, 0.2);
+}
+
+[data-theme="dark"] .my-critter-bar:hover {
+  box-shadow: 0 12px 40px rgba(255, 107, 157, 0.15);
+}
+
+/* Empty critter - smooth & calm on all devices */
+.empty-critter {
+  animation: critterFloat 5s ease-in-out infinite;
+  filter: drop-shadow(0 10px 25px rgba(255, 179, 209, 0.4));
+}
+
+/* Better loading state for status */
+.status-dot.reconnecting {
+  animation: reconnectPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes reconnectPulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 8px #fbbf24;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    box-shadow: 0 0 14px #fbbf24;
+    transform: scale(1.2);
+  }
+}
+
+.status-dot.connecting {
+  animation: connectingDot 1.2s ease-in-out infinite;
+}
+
+@keyframes connectingDot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+}
+
+/* Enhanced button feedback - exclude transfer buttons */
+.btn:not(.transfer-cancel-btn) {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btn:active {
+  transform: scale(0.95) !important;
+  transition-duration: 0.1s;
+}
+
+/* Feedback badge enhanced */
+.feedback-badge:hover,
+.feedback-btn:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(255, 107, 157, 0.5);
+}
+
+/* Drop overlay icon animation */
+.drop-icon svg {
+  animation: dropBounce 0.6s ease-in-out infinite;
+}
+
+/* Smoother modal opens */
+.modal.show .modal-content {
+  animation: modalSlideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* =============================================
+   Help Modal - Step Badges & FAQ
+   ============================================= */
+
+.help-subtitle {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--accent-pink);
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 14px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.step-badge {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  z-index: 1;
+}
+
+.help-step {
+  position: relative;
+}
+
+/* FAQ Styles */
+.help-faq {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.faq-item {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-card);
+  transition: all 0.3s ease;
+}
+
+.faq-item.open {
+  box-shadow: 0 4px 16px rgba(255, 179, 209, 0.15);
+  border-left: 3px solid var(--accent-pink);
+}
+
+[data-theme="dark"] .faq-item.open {
+  box-shadow: 0 4px 16px rgba(255, 107, 157, 0.1);
+}
+
+.faq-question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  transition: background 0.2s;
+}
+
+.faq-question:hover {
+  background: rgba(255, 179, 209, 0.1);
+}
+
+[data-theme="dark"] .faq-question:hover {
+  background: rgba(255, 107, 157, 0.1);
+}
+
+.faq-chevron {
+  display: flex;
+  transition: transform 0.3s ease;
+  color: var(--text-muted);
+}
+
+.faq-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.faq-answer {
+  padding: 0 16px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  animation: faqSlideDown 0.25s ease;
+}
+
+@keyframes faqSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =============================================
+   Responsive Design
+   ============================================= */
+
+/* Mobile - Small screens */
+@media (max-width: 480px) {
+  .empty-message {
+    font-size: 20px;
+  }
+
+  .empty-hint {
+    font-size: 13px;
+    padding: 0 8px;
+  }
+
+  .empty-critter {
+    font-size: 56px;
+    top: 30px;
+    /* Slower animation on mobile to save battery */
+    animation: critterFloatMobile 7s ease-in-out infinite;
+  }
+
+  .modal-content {
+    margin: 10px;
+    max-width: calc(100vw - 20px);
+    border-radius: 20px;
+  }
+
+  .peers-grid {
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  }
+
+  .peer-card {
+    padding: 16px 10px;
+  }
+
+  .peer-critter {
+    font-size: 36px;
+  }
+
+  .my-critter-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .my-critter-name {
+    font-size: 16px;
+  }
+
+  .help-tabs {
+    gap: 4px;
+  }
+
+  .help-tab {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .help-step {
+    gap: 10px;
+  }
+
+  /* Reduce background shapes on mobile for performance */
+  .shape {
+    filter: blur(60px);
+    opacity: 0.25;
+  }
+
+  .shape-1 {
+    width: 200px;
+    height: 200px;
+  }
+  .shape-2 {
+    width: 160px;
+    height: 160px;
+  }
+  .shape-3 {
+    width: 140px;
+    height: 140px;
+  }
+  .shape-4 {
+    width: 100px;
+    height: 100px;
+  }
+
+  /* Smaller clouds on mobile */
+  .cloud {
+    opacity: 0.4;
+  }
+
+  /* Reduce sparkles */
+  .sparkle {
+    display: none;
+  }
+  .sparkle:nth-child(1),
+  .sparkle:nth-child(2),
+  .sparkle:nth-child(3) {
+    display: block;
+  }
+
+  /* Mobile-optimized critter animation - slower, gentler */
+  @keyframes critterFloatMobile {
+    0%, 100% {
+      transform: translateX(-50%) translateY(0) rotate(0deg);
+      filter: drop-shadow(0 8px 16px rgba(255, 179, 209, 0.3));
+    }
+    50% {
+      transform: translateX(-50%) translateY(-5px) rotate(3deg);
+      filter: drop-shadow(0 12px 20px rgba(255, 179, 209, 0.4));
+    }
+  }
+}
+
+/* Tablet and larger */
+@media (min-width: 768px) {
+  .peers-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 24px;
+  }
+
+  .empty-critter-container {
+    transform: scale(1.1);
+    margin-bottom: 16px;
+  }
+
+  .modal-content {
+    max-width: 500px;
+  }
+
+  .help-steps {
+    gap: 16px;
+  }
+}
+
+/* Desktop - wider layout */
+@media (min-width: 1024px) {
+  .peers-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 28px;
+  }
+}
+
+/* =============================================
+   Accessibility - Reduced Motion
+   ============================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .bg-gradient-animated {
+    animation: none;
+  }
+
+  .shape,
+  .cloud,
+  .sparkle {
+    animation: none;
+  }
+
+  .peer-card {
+    transition: none;
+  }
+
+  .peer-card:hover {
+    transform: none;
+  }
+}
+
+/* =============================================
+   Performance - GPU Hints
+   ============================================= */
+
+.shape {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Only apply will-change in peers grid context, not globally */
+.peers-grid .peer-card {
+  will-change: transform;
+  transform: translateZ(0);
+}
