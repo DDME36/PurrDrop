@@ -1,0 +1,82 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+
+// Lucide Icon
+const PencilIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent-pink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>
+    <path d="m15 5 4 4"/>
+  </svg>
+);
+
+interface NameModalProps {
+  show: boolean;
+  currentName: string;
+  onSubmit: (name: string) => void;
+  onClose: () => void;
+}
+
+export function NameModal({ show, currentName, onSubmit, onClose }: NameModalProps) {
+  const [name, setName] = useState(currentName);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setName(currentName);
+  }, [currentName, show]);
+
+  // Scroll input into view when keyboard opens (iOS fix)
+  useEffect(() => {
+    if (show && inputRef.current) {
+      // Small delay to let modal render
+      setTimeout(() => {
+        inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  }, [show]);
+
+  if (!show) return null;
+
+  const handleSubmit = () => {
+    if (name.trim()) {
+      onSubmit(name.trim().slice(0, 20));
+    }
+    onClose();
+  };
+
+  const handleFocus = () => {
+    // Scroll to input when focused (iOS keyboard fix)
+    setTimeout(() => {
+      inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+  };
+
+  return (
+    <div className="modal show modal-keyboard-aware" onClick={onClose}>
+      <div className="modal-content modal-small modal-input-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-icon"><PencilIcon /></div>
+        <div className="modal-title">ตั้งชื่อใหม่</div>
+        <input
+          ref={inputRef}
+          type="text"
+          className="name-input"
+          placeholder="ชื่อของคุณ"
+          maxLength={20}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+          onFocus={handleFocus}
+          autoFocus
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+        />
+        <div className="modal-actions">
+          <button className="btn btn-reject" onClick={onClose}>ยกเลิก</button>
+          <button className="btn btn-accept" onClick={handleSubmit}>บันทึก</button>
+        </div>
+      </div>
+    </div>
+  );
+}
