@@ -12,7 +12,7 @@ export function detectDevice() {
     isDesktop: !/Mobile|Android|iPhone|iPad|iPod/.test(ua),
     
     // WebRTC support detection
-    supportsWebRTC: !!(window.RTCPeerConnection || window.webkitRTCPeerConnection),
+    supportsWebRTC: !!(window.RTCPeerConnection || (window as any).webkitRTCPeerConnection),
     supportsDataChannel: typeof RTCDataChannel !== 'undefined',
     
     // Feature detection
