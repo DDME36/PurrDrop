@@ -109,7 +109,7 @@ export interface FileEndMessage {
   fileId: string;
 }
 
-export interface TextMessage {
+export interface TextDataMessage {
   type: 'text-message';
   payload: string;
 }
