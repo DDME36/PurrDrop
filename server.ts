@@ -47,6 +47,8 @@ app.prepare().then(() => {
     console.log(`✅ Client connected: ${socket.id}`);
 
     socket.on('join', (peerData: Peer) => {
+      console.log(`📥 Join event received:`, peerData);
+      
       const peer: PeerWithMode = {
         ...peerData,
         id: socket.id,
@@ -55,7 +57,7 @@ app.prepare().then(() => {
       };
       
       peers.set(socket.id, peer);
-      console.log(`👤 Peer joined: ${peer.name} (${peer.device})`);
+      console.log(`👤 Peer joined: ${peer.name} (${peer.device}) - Total peers: ${peers.size}`);
       
       // Send current mode info
       socket.emit('mode-info', {
@@ -207,10 +209,12 @@ app.prepare().then(() => {
       });
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       const peer = peers.get(socket.id);
+      console.log(`❌ Client disconnected: ${socket.id} - Reason: ${reason} - Had peer data: ${!!peer}`);
+      
       if (peer) {
-        console.log(`👋 Peer left: ${peer.name}`);
+        console.log(`👋 Peer left: ${peer.name} - Remaining peers: ${peers.size - 1}`);
         
         // Leave room if in one
         if (peer.roomCode) {
@@ -229,7 +233,10 @@ app.prepare().then(() => {
 
     function broadcastPeers() {
       const peer = peers.get(socket.id);
-      if (!peer) return;
+      if (!peer) {
+        console.log(`⚠️ broadcastPeers called but peer ${socket.id} not found`);
+        return;
+      }
 
       let visiblePeers: PeerWithMode[] = [];
 
@@ -252,6 +259,7 @@ app.prepare().then(() => {
         }
       }
 
+      console.log(`📤 Sending ${visiblePeers.length} visible peers to ${peer.name} (mode: ${peer.mode})`);
       socket.emit('peers', visiblePeers);
     }
   });
