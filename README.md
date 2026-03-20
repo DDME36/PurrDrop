@@ -82,13 +82,29 @@ bun start
 ## 🌐 Deploy
 
 ### Render (แนะนำ - Free Tier)
+
+**วิธีที่ 1: ใช้ Blueprint (ง่ายที่สุด)**
+1. Fork repo นี้
+2. ไปที่ [Render Dashboard](https://dashboard.render.com)
+3. คลิก "New" → "Blueprint"
+4. เชื่อมต่อ GitHub repo ของคุณ
+5. Render จะอ่าน `render.yaml` และตั้งค่าให้อัตโนมัติ
+
+**วิธีที่ 2: Manual Setup**
 1. Fork repo นี้
 2. สร้าง Web Service ใหม่บน [Render](https://render.com)
 3. เชื่อมต่อ GitHub repo
 4. ตั้งค่า:
+   - Runtime: ตั้ง Environment Variable `BUN_VERSION=1.2.2`
    - Build Command: `bun install && bun run build`
    - Start Command: `bun start`
-   - Environment: Node
+   - Health Check Path: `/health`
+
+**Environment Variables (Optional):**
+- `BUN_VERSION`: `1.2.2` (หรือเวอร์ชันล่าสุด)
+- `ALLOWED_ORIGINS`: จำกัด CORS (เช่น `https://yourdomain.com`)
+- `TURN_USERNAME`: TURN server username จาก [Metered.ca](https://www.metered.ca/tools/openrelay/)
+- `TURN_CREDENTIAL`: TURN server credential
 
 Render จะ auto-deploy ทุกครั้งที่ push ไป GitHub!
 

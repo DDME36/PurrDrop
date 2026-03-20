@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: purrdrop
+    runtime: docker
+    plan: free
+    buildCommand: bun install && bun run build
+    startCommand: bun start
+    healthCheckPath: /health
+    envVars:
+      - key: BUN_VERSION
+        value: "1.2.2"
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: TURN_USERNAME
+        sync: false
+      - key: TURN_CREDENTIAL
+        sync: false

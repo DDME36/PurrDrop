@@ -7,8 +7,8 @@
   },
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "next build && tsc server.ts --outDir . --module commonjs --esModuleInterop --resolveJsonModule --skipLibCheck",
-    "start": "NODE_ENV=production node server.js",
+    "build": "next build && tsc -p tsconfig.server.json",
+    "start": "bun run server.js",
     "lint": "eslint"
   },
   "dependencies": {

@@ -2,8 +2,13 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2022",
     "outDir": ".",
-    "noEmit": false
+    "noEmit": false,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true
   },
   "include": ["server.ts"],
   "exclude": ["node_modules"]

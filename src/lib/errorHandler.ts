@@ -2,6 +2,8 @@
 export type ErrorType = 
   | 'network'
   | 'webrtc'
+  | 'relay'
+  | 'connection'
   | 'file'
   | 'permission'
   | 'timeout'
@@ -10,20 +12,46 @@ export type ErrorType =
 export interface AppError {
   type: ErrorType;
   message: string;
-  originalError?: any;
+  originalError?: unknown;
   userMessage: string;
   canRetry: boolean;
   suggestedAction?: string;
 }
 
-export function handleError(error: any, context: string): AppError {
+export function handleError(error: unknown, context: string): AppError {
   console.error(`❌ Error in ${context}:`, error);
 
+  const msg = error instanceof Error ? error.message : String(error);
+
+  // Relay errors (ACK timeout, chunk timeout, peer disconnect during relay)
+  if (msg.includes('Relay') || msg.includes('relay') || msg.includes('ผู้รับไม่ตอบสนอง')) {
+    return {
+      type: 'relay',
+      message: msg,
+      originalError: error,
+      userMessage: 'การส่งผ่าน Relay ล้มเหลว',
+      canRetry: true,
+      suggestedAction: 'ลองส่งใหม่อีกครั้ง',
+    };
+  }
+
+  // Connection loss during transfer
+  if (msg.includes('disconnect') || msg.includes('ตัดการเชื่อมต่อ') || msg.includes('Socket disconnected')) {
+    return {
+      type: 'connection',
+      message: msg,
+      originalError: error,
+      userMessage: 'การเชื่อมต่อขาดหายระหว่างส่งไฟล์',
+      canRetry: true,
+      suggestedAction: 'รอสักครู่แล้วลองส่งใหม่',
+    };
+  }
+
   // Network errors
-  if (error.message?.includes('network') || error.message?.includes('fetch')) {
+  if (msg.includes('network') || msg.includes('fetch') || msg.includes('No internet')) {
     return {
       type: 'network',
-      message: error.message,
+      message: msg,
       originalError: error,
       userMessage: 'เชื่อมต่ออินเทอร์เน็ตไม่ได้',
       canRetry: true,
@@ -32,10 +60,10 @@ export function handleError(error: any, context: string): AppError {
   }
 
   // WebRTC errors
-  if (error.message?.includes('ICE') || error.message?.includes('DataChannel')) {
+  if (msg.includes('ICE') || msg.includes('DataChannel') || msg.includes('Connection timeout')) {
     return {
       type: 'webrtc',
-      message: error.message,
+      message: msg,
       originalError: error,
       userMessage: 'การเชื่อมต่อ P2P ล้มเหลว',
       canRetry: true,
@@ -44,10 +72,10 @@ export function handleError(error: any, context: string): AppError {
   }
 
   // File errors
-  if (error.message?.includes('file') || error.message?.includes('read')) {
+  if (msg.includes('file') || msg.includes('read') || msg.includes('Failed to read')) {
     return {
       type: 'file',
-      message: error.message,
+      message: msg,
       originalError: error,
       userMessage: 'อ่านไฟล์ไม่สำเร็จ',
       canRetry: false,
@@ -56,10 +84,10 @@ export function handleError(error: any, context: string): AppError {
   }
 
   // Permission errors
-  if (error.message?.includes('permission') || error.message?.includes('denied')) {
+  if (msg.includes('permission') || msg.includes('denied')) {
     return {
       type: 'permission',
-      message: error.message,
+      message: msg,
       originalError: error,
       userMessage: 'ไม่มีสิทธิ์เข้าถึง',
       canRetry: false,
@@ -68,10 +96,10 @@ export function handleError(error: any, context: string): AppError {
   }
 
   // Timeout errors
-  if (error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+  if (msg.includes('timeout') || msg.includes('Timeout') || msg.includes('หมดเวลา')) {
     return {
       type: 'timeout',
-      message: error.message,
+      message: msg,
       originalError: error,
       userMessage: 'หมดเวลาเชื่อมต่อ',
       canRetry: true,
@@ -82,7 +110,7 @@ export function handleError(error: any, context: string): AppError {
   // Unknown errors
   return {
     type: 'unknown',
-    message: error.message || String(error),
+    message: msg,
     originalError: error,
     userMessage: 'เกิดข้อผิดพลาด',
     canRetry: true,

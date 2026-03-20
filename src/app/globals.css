@@ -26,9 +26,20 @@
   --shadow-glow: 0 0 40px rgba(255, 179, 209, 0.3);
   --radius: 24px;
   --radius-sm: 16px;
+  --radius-pill: 50px;
   --font-display: "Mitr", "IBM Plex Sans Thai", sans-serif;
   --font-body: "IBM Plex Sans Thai", "Mitr", sans-serif;
   --border-color: rgba(0, 0, 0, 0.05);
+  
+  /* Status colors */
+  --status-error: #ef4444;
+  --status-warning: #fbbf24;
+  --status-success: #10b981;
+  
+  /* Transfer colors */
+  --transfer-filename: var(--text-secondary);
+  --transfer-status: var(--text-muted);
+  --transfer-track: #e8e8e8;
 }
 
 /* Dark Theme */
@@ -49,6 +60,40 @@
   --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.3);
   --shadow-glow: 0 0 40px rgba(255, 107, 157, 0.2);
   --border-color: rgba(255, 255, 255, 0.1);
+  
+  /* Status colors - dark mode */
+  --status-error: #f87171;
+  --status-warning: #fcd34d;
+  --status-success: #34d399;
+  
+  /* Transfer colors - dark mode */
+  --transfer-filename: var(--text-secondary);
+  --transfer-status: var(--text-muted);
+  --transfer-track: #3a3a5a;
+}
+
+/* Reduce Motion for Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  /* Disable background animations */
+  .bg-gradient-animated {
+    animation: none !important;
+  }
+  
+  .shape,
+  .cloud,
+  .sparkle {
+    animation: none !important;
+    opacity: 0.3 !important;
+  }
 }
 
 body {
@@ -603,72 +648,9 @@ body {
   display: none;
 }
 
-@keyframes shimmer {
-  0% {
-    left: -100%;
-  }
-
-  100% {
-    left: 100%;
-  }
-}
-
 .my-critter-bar.offline {
   opacity: 0.7;
   border-color: var(--accent-pink);
-}
-
-/* Gradient Wave Logo */
-.logo {
-  display: flex;
-  align-items: center;
-}
-
-.logo-text {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 28px;
-  display: flex;
-  line-height: 1;
-  /* Removed unified gradient to fix visibility issues */
-  background: none;
-}
-
-.logo-char {
-  display: inline-block;
-  /* True Darker Pastel (Peach -> Pink) - Matches original theme but visible */
-  background: linear-gradient(135deg, #ff8c61, #fa7298);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: #ff8c61;
-
-  animation: logoWave 3s ease-in-out infinite;
-  transform-origin: bottom center;
-
-  /* Soft shadow to lift it slightly */
-  filter: drop-shadow(0 2px 2px rgba(250, 114, 152, 0.2));
-}
-
-/* .logo-char.drop removed to ensure consistent gradient across all characters */
-
-@keyframes logoWave {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  25% {
-    transform: translateY(-4px);
-  }
-
-  50% {
-    transform: translateY(0);
-  }
-
-  75% {
-    transform: translateY(0);
-  }
 }
 
 .my-critter-avatar {

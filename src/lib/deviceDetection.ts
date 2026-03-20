@@ -1,9 +1,15 @@
 // Enhanced Device Detection
 export function detectDevice() {
   const ua = navigator.userAgent;
+  const platform = navigator.platform || '';
+  const maxTouchPoints = navigator.maxTouchPoints || 0;
+  
+  // Improved iOS/iPadOS detection
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || 
+                (platform === 'MacIntel' && maxTouchPoints > 1);
   
   return {
-    isIOS: /iPad|iPhone|iPod/.test(ua),
+    isIOS,
     isAndroid: /Android/.test(ua),
     isSafari: /Safari/.test(ua) && !/Chrome/.test(ua),
     isChrome: /Chrome/.test(ua),
@@ -29,13 +35,14 @@ export function detectDevice() {
 export function shouldUseRelay(): boolean {
   const device = detectDevice();
   
-  // Force relay for iOS (WebRTC unreliable)
+  // iOS Safari: WebRTC DataChannel ไม่เสถียร → ใช้ Relay เสมอ
+  // (Relay ตอนนี้มี ACK handshake + socket ไม่โดน React ทำลายแล้ว)
   if (device.isIOS) return true;
-  
-  // Force relay for old browsers without WebRTC
+
+  // บราวเซอร์ที่ไม่รองรับ WebRTC
   if (!device.supportsWebRTC || !device.supportsDataChannel) return true;
   
-  // Force relay for slow connections
+  // Force relay for very slow connections
   if (device.connectionType === 'slow-2g' || device.connectionType === '2g') return true;
   
   return false;
