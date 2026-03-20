@@ -6,6 +6,8 @@ const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
 
+console.log(`🔧 Starting server in ${dev ? 'development' : 'production'} mode on port ${port}...`);
+
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
 
@@ -28,7 +30,18 @@ interface PeerWithMode extends Peer {
 }
 
 app.prepare().then(() => {
-  const httpServer = createServer(handler);
+  console.log('✅ Next.js prepared, creating HTTP server...');
+  
+  const httpServer = createServer((req, res) => {
+    // Health check endpoint for Render
+    if (req.url === '/health' || req.url === '/api/health') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('OK');
+      return;
+    }
+    
+    handler(req, res);
+  });
   
   const io = new Server(httpServer, {
     cors: {
@@ -264,7 +277,11 @@ app.prepare().then(() => {
     }
   });
 
-  httpServer.listen(port, () => {
+  httpServer.listen(port, hostname, () => {
     console.log(`🚀 Server running on http://${hostname}:${port}`);
+    console.log(`✅ Ready to accept connections`);
   });
+}).catch((err) => {
+  console.error('❌ Error starting server:', err);
+  process.exit(1);
 });
