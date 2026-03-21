@@ -67,7 +67,7 @@ app.prepare().then(() => {
   const rejectedRelays = new Set<string>(); // Track rejected relay sessions
   const activeRelays = new Map<string, { startTime: number; from: string; to: string; size: number }>(); // Track active relay sessions
   const MAX_PEERS = 100; // Free tier limit
-  const MAX_RELAY_SIZE = 500 * 1024 * 1024; // 500MB (แต่ไม่เก็บใน memory)
+  // MAX_RELAY_SIZE removed - ไม่จำกัดขนาดไฟล์ (ใช้ streaming)
   const RELAY_TIMEOUT = 10 * 60 * 1000; // 10 minutes — auto-cleanup abandoned relays
   const STALE_PEER_INTERVAL = 60 * 1000; // Check for stale peers every 60s
 
@@ -224,24 +224,14 @@ app.prepare().then(() => {
         return;
       }
 
-      // เพิ่ม limit เป็น 500MB แต่ไม่เก็บใน memory (forward ทันที)
-      if (size > MAX_RELAY_SIZE) {
-        console.error(`❌ Relay rejected: File too large (${(size / 1024 / 1024).toFixed(1)}MB > ${MAX_RELAY_SIZE / 1024 / 1024}MB)`);
-        rejectedRelays.add(fileId); // Mark as rejected
-        socket.emit('relay-error', { 
-          fileId, 
-          error: `ไฟล์ใหญ่เกินไปสำหรับ relay (สูงสุด ${MAX_RELAY_SIZE / 1024 / 1024}MB)`,
-          suggestedAction: 'กรุณาใช้ WebRTC แทน หรือลองเชื่อมต่อใหม่'
-        });
-        // ⚠️ IMPORTANT: Don't send relay-end to receiver if we rejected the file!
-        return;
-      }
+      // เอา limit ออก - รองรับไฟล์ไม่จำกัดขนาด (ใช้ streaming ไม่เก็บใน memory)
+      // if (size > MAX_RELAY_SIZE) { ... } // ลบออกแล้ว
       
       // Track active relay session
       activeRelays.set(fileId, { startTime: Date.now(), from: socket.id, to, size });
       console.log(`📊 Active relays: ${activeRelays.size}`);
       
-      // Forward ทันที ไม่เก็บใน memory
+      // Forward ทันที ไม่เก็บใน memory (streaming mode)
       console.log(`✅ Forwarding relay-start to ${to}`);
       io.to(to).emit('relay-start', {
         from: socket.id,
