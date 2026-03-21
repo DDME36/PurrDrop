@@ -6,7 +6,7 @@ interface TransferProgressProps {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: 'pending' | 'sending' | 'receiving' | 'complete' | 'saving' | 'error';
+  status: 'pending' | 'connecting' | 'sending' | 'receiving' | 'complete' | 'saving' | 'error';
   emoji: string;
   peerName: string;
   connectionType?: 'direct' | 'stun' | 'relay';
@@ -153,6 +153,7 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
 
   const statusConfig = {
     pending: { text: 'รอการยืนยัน...', icon: 'waiting', color: 'var(--accent-lavender)' },
+    connecting: { text: 'กำลังเชื่อมต่อ...', icon: 'waiting', color: 'var(--accent-lavender)' },
     sending: { text: 'กำลังส่ง', icon: 'upload', color: 'var(--accent-mint)' },
     receiving: { text: 'กำลังรับ', icon: 'download', color: 'var(--accent-peach)' },
     saving: { text: 'รอบันทึกไฟล์...', icon: 'save', color: 'var(--accent-lavender)' },
@@ -161,7 +162,7 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
   };
 
   const config = statusConfig[status];
-  const isActive = status === 'pending' || status === 'sending' || status === 'receiving' || status === 'saving';
+  const isActive = status === 'pending' || status === 'connecting' || status === 'sending' || status === 'receiving' || status === 'saving';
 
   let iconSvg = null;
   if (config.icon === 'waiting') {

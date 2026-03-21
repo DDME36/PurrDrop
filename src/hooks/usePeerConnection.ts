@@ -37,7 +37,7 @@ interface TransferProgress {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: 'pending' | 'sending' | 'receiving' | 'complete' | 'saving' | 'error';
+  status: 'pending' | 'connecting' | 'sending' | 'receiving' | 'complete' | 'saving' | 'error';
   connectionType?: 'direct' | 'stun' | 'relay';
 }
 
@@ -559,7 +559,7 @@ export function usePeerConnection() {
       fileName: file.name,
       fileSize: file.size,
       progress: 0,
-      status: 'sending',
+      status: 'connecting', // เริ่มต้นด้วย connecting
       connectionType: 'relay',
     });
 
@@ -598,6 +598,10 @@ export function usePeerConnection() {
             clearTimeout(timeout);
             socketRef.current?.off('relay-ready', onReady);
             console.log('✅ relay-ready ACK received, starting chunks...');
+            
+            // เปลี่ยนสถานะเป็น sending เมื่อเริ่มส่งจริงๆ
+            setTransfer(prev => prev ? { ...prev, status: 'sending' } : null);
+            
             resolve();
           }
         };
@@ -709,7 +713,7 @@ export function usePeerConnection() {
       fileName: file.name,
       fileSize: file.size,
       progress: 0,
-      status: 'sending',
+      status: 'connecting', // เริ่มต้นด้วย connecting
     });
 
     try {
@@ -838,6 +842,10 @@ export function usePeerConnection() {
       // Send file info
       console.log('📤 Sending file-start');
       console.log(`📊 File details: ${file.name}, size: ${file.size}, type: ${file.type || 'unknown'}`);
+      
+      // เปลี่ยนสถานะเป็น sending เมื่อเริ่มส่งจริงๆ
+      setTransfer(prev => prev ? { ...prev, status: 'sending' } : null);
+      
       dc.send(JSON.stringify({
         type: 'file-start',
         fileId,
