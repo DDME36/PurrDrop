@@ -10,9 +10,9 @@ import { detectImageMimeType, validateFile, downloadBlob, requestWakeLock, relea
 import { detectDevice, shouldUseRelay } from '@/lib/deviceDetection';
 import { handleError, logError } from '@/lib/errorHandler';
 
-const MAX_RETRIES = 2; // ลดเหลือ 2 ครั้งสำหรับ iOS
-const RETRY_DELAY = 500; // ลดเหลือ 0.5 วินาที
-const CONNECTION_TIMEOUT = 15000; // ลดเหลือ 15 วินาทีสำหรับ iOS
+const MAX_RETRIES = 1; // ลดเหลือ 1 ครั้ง - fallback ไป relay เร็วขึ้น
+const RETRY_DELAY = 300; // ลดเหลือ 0.3 วินาที
+const CONNECTION_TIMEOUT = 8000; // ลดเหลือ 8 วินาที - fallback เร็วขึ้น
 
 // Debug logging helper
 const debugLog = (message: string, ...args: any[]) => {
@@ -747,12 +747,12 @@ export function usePeerConnection() {
           };
           pc.addEventListener('icegatheringstatechange', checkGathering);
           
-          // Timeout หลัง 3 วินาที ส่งไปเลย
+          // Timeout หลัง 1.5 วินาที ส่งไปเลย (ลดจาก 3 วินาที)
           setTimeout(() => {
             pc.removeEventListener('icegatheringstatechange', checkGathering);
             console.log('⏱️ ICE gathering timeout, sending anyway');
             resolve();
-          }, 3000);
+          }, 1500);
         });
       }
 
@@ -1637,11 +1637,12 @@ export function usePeerConnection() {
             pc.addEventListener('icegatheringstatechange', checkGathering);
             
             // Timeout 3 วินาที
+            // Timeout หลัง 1.5 วินาที (ลดจาก 3 วินาที)
             setTimeout(() => {
               pc.removeEventListener('icegatheringstatechange', checkGathering);
               console.log('⏱️ ICE gathering timeout (receiver), sending anyway');
               resolve();
-            }, 3000);
+            }, 1500);
           });
         }
         
