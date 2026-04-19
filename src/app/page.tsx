@@ -13,6 +13,7 @@ import { Toast, ToastRef } from '@/components/Toast';
 import { Footer } from '@/components/Footer';
 import { BrowserWarning } from '@/components/BrowserWarning';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { ConnectionQualityIndicator } from '@/components/ConnectionQualityIndicator';
 import {
   FileOfferModal,
   NameModal,
@@ -30,6 +31,7 @@ import { useNotification } from '@/hooks/useNotification';
 import { Peer } from '@/lib/critters';
 import { createZipFile, FileWithContext } from '@/lib/compression';
 import { getHistory, addToHistory, TransferRecord } from '@/lib/transferHistory';
+import { detectNetworkQuality, NetworkQuality } from '@/lib/networkQuality';
 
 export default function Home() {
   const {
@@ -73,6 +75,7 @@ export default function Home() {
   const [baseUrl, setBaseUrl] = useState('');
   const [history, setHistory] = useState<TransferRecord[]>([]);
   const [initialModeSet, setInitialModeSet] = useState(false);
+  const [networkQuality, setNetworkQuality] = useState<NetworkQuality>('good');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedPeerRef = useRef<Peer | null>(null);
@@ -84,6 +87,19 @@ export default function Home() {
   // Load history on mount
   useEffect(() => {
     setHistory(getHistory());
+  }, []);
+
+  // Monitor network quality
+  useEffect(() => {
+    // Initial check
+    detectNetworkQuality().then(setNetworkQuality);
+    
+    // Check every 30 seconds
+    const interval = setInterval(() => {
+      detectNetworkQuality().then(setNetworkQuality);
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Handle URL params for mode/room on mount
@@ -370,6 +386,21 @@ export default function Home() {
           onShowHistory={() => setShowHistoryModal(true)}
           onShowQR={() => setShowQRModal(true)}
         />
+
+        {/* Network Quality Indicator */}
+        {transfer && (
+          <div style={{ 
+            position: 'fixed', 
+            top: '80px', 
+            right: '20px', 
+            zIndex: 100 
+          }}>
+            <ConnectionQualityIndicator
+              connectionType={transfer.connectionType}
+              quality={networkQuality}
+            />
+          </div>
+        )}
 
         <MyInfo
           peer={myPeer}

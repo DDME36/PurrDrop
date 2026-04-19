@@ -34,25 +34,42 @@ const InfoIcon = () => (
   </svg>
 );
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface ToastRef {
-  show: (message: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
+  show: (message: string, type?: 'success' | 'error' | 'warning' | 'info', action?: ToastAction) => void;
 }
 
 interface ToastItem {
   id: number;
   message: string;
   type: 'success' | 'error' | 'warning' | 'info';
+  action?: ToastAction;
 }
 
 export const Toast = forwardRef<ToastRef>(function Toast(_, ref) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  const show = useCallback((message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+  const show = useCallback((
+    message: string, 
+    type: 'success' | 'error' | 'warning' | 'info' = 'info',
+    action?: ToastAction
+  ) => {
     const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
+    setToasts(prev => [...prev, { id, message, type, action }]);
+    
+    // Auto-dismiss after 5 seconds (or 7 seconds if has action)
+    const duration = action ? 7000 : 5000;
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
+    }, duration);
+  }, []);
+
+  const dismiss = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
   useImperativeHandle(ref, () => ({ show }));
@@ -68,8 +85,33 @@ export const Toast = forwardRef<ToastRef>(function Toast(_, ref) {
     <div id="toastContainer">
       {toasts.map(toast => (
         <div key={toast.id} className={`toast ${toast.type}`}>
-          <span className="toast-icon">{icons[toast.type]}</span>
-          <span>{toast.message}</span>
+          <div className="toast-content">
+            <span className="toast-icon">{icons[toast.type]}</span>
+            <span className="toast-message">{toast.message}</span>
+          </div>
+          
+          {toast.action && (
+            <button 
+              className="toast-action"
+              onClick={() => {
+                toast.action!.onClick();
+                dismiss(toast.id);
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
+          
+          <button 
+            className="toast-close"
+            onClick={() => dismiss(toast.id)}
+            aria-label="ปิด"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18"/>
+              <path d="m6 6 12 12"/>
+            </svg>
+          </button>
         </div>
       ))}
     </div>

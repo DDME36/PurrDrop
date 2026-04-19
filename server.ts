@@ -59,17 +59,20 @@ app.prepare().then(() => {
     transports: ['websocket', 'polling'],
     pingTimeout: 60000,
     pingInterval: 25000,
-    maxHttpBufferSize: 100 * 1024 * 1024 // 100MB max for relay
+    maxHttpBufferSize: 1 * 1024 * 1024, // 1MB - ลดลงเพราะใช้ streaming
+    perMessageDeflate: false, // ปิด compression เพื่อลด CPU
+    httpCompression: false // ปิด HTTP compression
   });
 
   const peers = new Map<string, PeerWithMode>();
   const rooms = new Map<string, Set<string>>();
   const rejectedRelays = new Set<string>(); // Track rejected relay sessions
   const activeRelays = new Map<string, { startTime: number; from: string; to: string; size: number }>(); // Track active relay sessions
-  const MAX_PEERS = 100; // Free tier limit
-  // MAX_RELAY_SIZE removed - ไม่จำกัดขนาดไฟล์ (ใช้ streaming)
-  const RELAY_TIMEOUT = 10 * 60 * 1000; // 10 minutes — auto-cleanup abandoned relays
+  const MAX_PEERS = 50; // ลดลงเพื่อประหยัด memory
+  const MAX_CONCURRENT_RELAYS = 3; // จำกัดจำนวน relay พร้อมกัน
+  const RELAY_TIMEOUT = 5 * 60 * 1000; // ลดเหลือ 5 นาที
   const STALE_PEER_INTERVAL = 60 * 1000; // Check for stale peers every 60s
+  const RELAY_CHUNK_THROTTLE = 10; // ms - throttle relay chunks
 
   io.on('connection', (socket: Socket) => {
     if (peers.size >= MAX_PEERS) {
@@ -224,8 +227,26 @@ app.prepare().then(() => {
         return;
       }
 
-      // เอา limit ออก - รองรับไฟล์ไม่จำกัดขนาด (ใช้ streaming ไม่เก็บใน memory)
-      // if (size > MAX_RELAY_SIZE) { ... } // ลบออกแล้ว
+      // จำกัดจำนวน relay พร้อมกัน (ป้องกัน server ล่ม)
+      if (activeRelays.size >= MAX_CONCURRENT_RELAYS) {
+        console.error(`❌ Relay rejected: Too many concurrent relays (${activeRelays.size}/${MAX_CONCURRENT_RELAYS})`);
+        socket.emit('relay-error', { 
+          fileId, 
+          error: 'เซิร์ฟเวอร์กำลังส่งไฟล์เต็มแล้ว กรุณารอสักครู่',
+          suggestedAction: 'ลองใหม่อีกครั้งใน 1-2 นาที หรือใช้ WiFi เดียวกันเพื่อส่งตรง P2P'
+        });
+        return;
+      }
+
+      // แนะนำให้ใช้ P2P สำหรับไฟล์ใหญ่
+      if (size > 50 * 1024 * 1024) { // > 50MB
+        console.warn(`⚠️ Large file relay: ${(size / 1024 / 1024).toFixed(1)}MB - suggesting P2P`);
+        socket.emit('relay-warning', {
+          fileId,
+          message: 'ไฟล์ใหญ่กว่า 50MB แนะนำให้ใช้ WiFi เดียวกันเพื่อส่งเร็วขึ้น',
+          size
+        });
+      }
       
       // Track active relay session
       activeRelays.set(fileId, { startTime: Date.now(), from: socket.id, to, size });
@@ -250,11 +271,21 @@ app.prepare().then(() => {
       });
     });
 
+    // Throttle relay chunks เพื่อลด CPU/bandwidth
+    let lastRelayTime = 0;
     socket.on('relay-chunk', ({ to, fileId, chunk }: { to: string; fileId: string; chunk: ArrayBuffer }) => {
       // Don't forward chunks for rejected relays
       if (rejectedRelays.has(fileId)) {
         return;
       }
+      
+      // Throttle เพื่อไม่ให้ server ทำงานหนักเกินไป
+      const now = Date.now();
+      if (now - lastRelayTime < RELAY_CHUNK_THROTTLE) {
+        // Skip this chunk if too fast (client will retry)
+        return;
+      }
+      lastRelayTime = now;
       
       // Forward ทันที - ใช้ memory แค่ชั่วขณะ แล้ว GC ทิ้งทันที
       io.to(to).emit('relay-chunk', {

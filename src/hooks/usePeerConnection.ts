@@ -10,9 +10,9 @@ import { detectImageMimeType, validateFile, downloadBlob, requestWakeLock, relea
 import { detectDevice, shouldUseRelay } from '@/lib/deviceDetection';
 import { handleError, logError } from '@/lib/errorHandler';
 
-const MAX_RETRIES = 1; // ลดเหลือ 1 ครั้ง - fallback ไป relay เร็วขึ้น
-const RETRY_DELAY = 300; // ลดเหลือ 0.3 วินาที
-const CONNECTION_TIMEOUT = 8000; // ลดเหลือ 8 วินาที - fallback เร็วขึ้น
+const MAX_RETRIES = 2; // เพิ่มจาก 1 → 2 เพื่อให้ P2P มีโอกาสมากขึ้น
+const RETRY_DELAY = 500; // เพิ่มจาก 300 → 500ms
+const CONNECTION_TIMEOUT = 15000; // เพิ่มจาก 8000 → 15 วินาที - ให้เวลา ICE มากขึ้น
 
 // Debug logging helper
 const debugLog = (message: string, ...args: any[]) => {
@@ -121,18 +121,40 @@ export function usePeerConnection() {
   useEffect(() => { myPeerRef.current = myPeer; }, [myPeer]);
   useEffect(() => { peersRef.current = peers; }, [peers]);
 
-  // Download blob - with iOS Safari support
-  const downloadBlob = useCallback((blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-
-    // Check if iOS Safari
+  // Download blob - with iOS Safari support + Share API
+  const downloadBlob = useCallback(async (blob: Blob, filename: string) => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
     if (isIOS) {
-      // iOS Safari: open in new tab, user can then save
+      // Try Share API first (best UX for iOS)
+      if (navigator.share && navigator.canShare) {
+        try {
+          const file = new File([blob], filename, { type: blob.type });
+          
+          if (await navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: 'PurrDrop',
+              text: `ไฟล์: ${filename}`,
+            });
+            console.log('✅ Shared via Share API');
+            return;
+          }
+        } catch (err) {
+          console.log('Share API failed or cancelled:', err);
+        }
+      }
+      
+      // Fallback: Open in new tab
+      const url = URL.createObjectURL(blob);
       const newWindow = window.open(url, '_blank');
+      
       if (!newWindow) {
-        // Popup blocked, try direct link
+        // Popup blocked - show instructions
+        console.warn('⚠️ Popup blocked - user needs to allow popups');
+        // TODO: Show IOSDownloadModal here
+        
+        // Try direct link as last resort
         const a = document.createElement('a');
         a.href = url;
         a.download = filename;
@@ -142,17 +164,19 @@ export function usePeerConnection() {
         a.click();
         document.body.removeChild(a);
       }
+      
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
     } else {
       // Other browsers: direct download
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
     }
-
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }, []);
 
   // Setup data channel handlers
@@ -1389,10 +1413,11 @@ export function usePeerConnection() {
         // ลบออกจาก pending ก่อนส่ง
         pendingFilesRef.current.delete(fileId);
         
-        // เช็คว่าควรใช้ relay หรือไม่
-        const useRelay = shouldUseRelay();
+        // เช็คว่าควรใช้ relay หรือไม่ (ส่ง discoveryMode และ fileSize)
+        const useRelay = shouldUseRelay(discoveryModeRef.current, pending.file.size);
         console.log(`🔀 Transfer mode: ${useRelay ? 'Relay' : 'WebRTC'}`);
         console.log(`📱 Device info:`, detectDevice());
+        console.log(`📊 Discovery mode: ${discoveryModeRef.current}, File size: ${(pending.file.size / 1024 / 1024).toFixed(2)}MB`);
         
         // ส่งไฟล์ — ใช้ ref เพื่อไม่ให้ useEffect re-run
         try {

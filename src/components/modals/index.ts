@@ -10,3 +10,5 @@ export { TextShareModal } from './TextShareModal';
 export { ConfirmModal } from './ConfirmModal';
 export { FeedbackModal } from './FeedbackModal';
 export { TextViewModal } from './TextViewModal';
+export { ErrorModal } from './ErrorModal';
+export { IOSDownloadModal } from './IOSDownloadModal';

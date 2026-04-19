@@ -32,12 +32,29 @@ export function detectDevice() {
   };
 }
 
-export function shouldUseRelay(): boolean {
+export function shouldUseRelay(discoveryMode?: string, fileSize?: number): boolean {
   const device = detectDevice();
   
-  // iOS Safari: WebRTC DataChannel ไม่เสถียร → ใช้ Relay เสมอ
-  // (Relay ตอนนี้มี ACK handshake + socket ไม่โดน React ทำลายแล้ว)
-  if (device.isIOS) return true;
+  // iOS Safari: WebRTC ดีขึ้นมากใน iOS 16+
+  if (device.isIOS) {
+    const iosVersion = getIOSVersion();
+    
+    // iOS 16+ และอยู่ WiFi เดียวกัน → ลอง P2P
+    if (iosVersion >= 16 && discoveryMode === 'wifi') {
+      // ไฟล์เล็ก (< 50MB) → ลอง P2P เสมอ
+      if (fileSize && fileSize < 50 * 1024 * 1024) {
+        console.log('📱 iOS 16+ WiFi mode + small file → trying P2P');
+        return false;
+      }
+      // ไฟล์ใหญ่ → ลอง P2P แต่มี fallback
+      console.log('📱 iOS 16+ WiFi mode → trying P2P with fallback');
+      return false;
+    }
+    
+    // iOS 15 หรือ network ต่างกัน → Relay
+    console.log('📱 iOS 15 or different network → using Relay');
+    return true;
+  }
 
   // บราวเซอร์ที่ไม่รองรับ WebRTC
   if (!device.supportsWebRTC || !device.supportsDataChannel) return true;
@@ -46,6 +63,11 @@ export function shouldUseRelay(): boolean {
   if (device.connectionType === 'slow-2g' || device.connectionType === '2g') return true;
   
   return false;
+}
+
+function getIOSVersion(): number {
+  const match = navigator.userAgent.match(/OS (\d+)_/);
+  return match ? parseInt(match[1]) : 0;
 }
 
 export function getRecommendedChunkSize(): number {
