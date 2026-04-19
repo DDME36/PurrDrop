@@ -1534,7 +1534,30 @@ export function usePeerConnection() {
         return;
       }
 
-      console.log(`📊 Relay complete - Chunks: ${receiving.chunks.length}, Total size: ${receiving.received}, Expected: ${receiving.info.size}`);
+      console.log(`📊 Relay complete - Chunks: ${receiving.chunks.length}, Total received: ${receiving.received} bytes, Expected: ${receiving.info.size} bytes`);
+      
+      // Check if we received all data
+      if (receiving.received < receiving.info.size) {
+        const missing = receiving.info.size - receiving.received;
+        const percentMissing = ((missing / receiving.info.size) * 100).toFixed(1);
+        console.error(`❌ INCOMPLETE TRANSFER: Missing ${missing} bytes (${percentMissing}%)`);
+        console.error(`💡 This causes "Unexpected end of archive" errors`);
+        
+        // Show error to user
+        setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
+        setTransferResult({
+          success: false,
+          fileName: receiving.info.name,
+          fileSize: receiving.info.size,
+          peerName: peersRef.current.find(p => p.id === receiving.senderId)?.name || 'ไม่ทราบชื่อ',
+          direction: 'received',
+        });
+        
+        receivingFilesRef.current.delete(data.fileId);
+        releaseWakeLockFn();
+        setTimeout(() => setTransfer(null), 5000);
+        return;
+      }
 
       if (receiving.streamWriter) {
         await receiving.streamWriter.close();
@@ -1547,6 +1570,13 @@ export function usePeerConnection() {
         
         const blob = new Blob(receiving.chunks, { type: receiving.info.type });
         console.log(`📦 Blob created - Size: ${blob.size}, Type: ${blob.type}`);
+        
+        // Verify blob size matches expected
+        if (blob.size !== receiving.info.size) {
+          console.error(`❌ SIZE MISMATCH: Blob is ${blob.size} bytes, expected ${receiving.info.size} bytes`);
+        } else {
+          console.log('✅ Size verification passed');
+        }
         
         // Use downloadBlob helper
         try {

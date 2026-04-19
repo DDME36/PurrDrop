@@ -271,27 +271,31 @@ app.prepare().then(() => {
       });
     });
 
-    // Throttle relay chunks เพื่อลด CPU/bandwidth
-    let lastRelayTime = 0;
+    // Track relay chunks per fileId for throttling
+    const relayChunkTimers = new Map<string, number>();
+    
     socket.on('relay-chunk', ({ to, fileId, chunk }: { to: string; fileId: string; chunk: ArrayBuffer }) => {
       // Don't forward chunks for rejected relays
       if (rejectedRelays.has(fileId)) {
         return;
       }
       
-      // Throttle เพื่อไม่ให้ server ทำงานหนักเกินไป
+      // Per-fileId throttle เพื่อไม่ให้ server ทำงานหนักเกินไป
+      // แต่ไม่ drop chunks (เก็บ queue แทน)
+      const lastTime = relayChunkTimers.get(fileId) || 0;
       const now = Date.now();
-      if (now - lastRelayTime < RELAY_CHUNK_THROTTLE) {
-        // Skip this chunk if too fast (client will retry)
-        return;
-      }
-      lastRelayTime = now;
       
-      // Forward ทันที - ใช้ memory แค่ชั่วขณะ แล้ว GC ทิ้งทันที
-      io.to(to).emit('relay-chunk', {
-        fileId,
-        chunk
-      });
+      if (now - lastTime < RELAY_CHUNK_THROTTLE) {
+        // Delay this chunk slightly instead of dropping it
+        setTimeout(() => {
+          io.to(to).emit('relay-chunk', { fileId, chunk });
+        }, RELAY_CHUNK_THROTTLE);
+      } else {
+        // Forward immediately
+        io.to(to).emit('relay-chunk', { fileId, chunk });
+      }
+      
+      relayChunkTimers.set(fileId, now);
     });
 
     socket.on('relay-end', ({ to, fileId }: { to: string; fileId: string }) => {
@@ -312,9 +316,14 @@ app.prepare().then(() => {
         console.log(`✅ Relay-end: ${fileId} from ${socket.id} to ${to}`);
       }
       
-      io.to(to).emit('relay-end', {
-        fileId
-      });
+      // Clean up chunk timer
+      relayChunkTimers.delete(fileId);
+      
+      // Delay relay-end slightly to ensure all chunks arrive first
+      // This prevents "unexpected end of archive" errors
+      setTimeout(() => {
+        io.to(to).emit('relay-end', { fileId });
+      }, 100);
     });
 
     // Text message

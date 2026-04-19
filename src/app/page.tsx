@@ -334,7 +334,22 @@ export default function Home() {
       }
 
       // For input selection, we don't have detailed path info, so use filename as path
-      const filesWithContext = validFiles.map(f => ({ file: f, path: f.name }));
+      // Clean up iOS temp filenames (temp_image_UUID.webp -> Image_1.webp)
+      const filesWithContext = validFiles.map((f, index) => {
+        let cleanName = f.name;
+        
+        // Detect iOS temp image pattern: temp_image_UUID.ext
+        if (/^temp_image_[A-F0-9-]{36}\.(webp|jpg|jpeg|png)$/i.test(f.name)) {
+          const ext = f.name.split('.').pop();
+          cleanName = `Image_${index + 1}.${ext}`;
+          console.log(`🔄 Renamed iOS temp file: ${f.name} → ${cleanName}`);
+        }
+        
+        return { 
+          file: new File([f], cleanName, { type: f.type || 'application/octet-stream' }), 
+          path: cleanName 
+        };
+      });
 
       console.log(`📤 Preparing to send ${validFiles.length} file(s) to ${selectedPeerRef.current.name}`);
       handleMultiFiles(filesWithContext, selectedPeerRef.current);
