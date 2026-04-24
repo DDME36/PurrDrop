@@ -30,6 +30,7 @@ import { usePeerConnection } from '@/hooks/usePeerConnection';
 import { useTheme } from '@/hooks/useTheme';
 import { useNotification } from '@/hooks/useNotification';
 import { Peer } from '@/lib/critters';
+import { detectImageMimeType } from '@/lib/webrtc';
 import { createZipFile, FileWithContext } from '@/lib/compression';
 import { getHistory, addToHistory, TransferRecord } from '@/lib/transferHistory';
 import { detectNetworkQuality, NetworkQuality } from '@/lib/networkQuality';
@@ -648,6 +649,7 @@ export default function Home() {
         history={history}
         onClose={() => setShowHistoryModal(false)}
         onClear={handleClearHistory}
+        onRemoveItem={handleRemoveHistoryItem}
       />
 
       <FeedbackModal

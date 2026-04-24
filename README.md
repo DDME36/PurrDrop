@@ -1,191 +1,63 @@
 # 🐱 PurrDrop
 
-> Cute P2P File Transfer - ส่งไฟล์ง่ายๆ ไม่ต้องลงแอป!
+**PurrDrop** คือเว็บแอปพลิเคชันสำหรับส่งไฟล์ข้ามอุปกรณ์ที่เน้นความง่าย ความเป็นส่วนตัว และความเร็ว โดยใช้เทคโนโลยี WebRTC สำหรับการส่งข้อมูลแบบ Peer-to-Peer (P2P) โดยไม่ต้องผ่านเซิร์ฟเวอร์ในสภาวะปกติ พร้อมระบบ Relay สำรองเพื่อให้ใช้งานได้ทุกเครือข่าย
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
-[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
-[![WebRTC](https://img.shields.io/badge/WebRTC-P2P-blue)](https://webrtc.org/)
+![PurrDrop OG Image](/public/og-image.png)
 
-![PurrDrop Demo](https://via.placeholder.com/800x400/ffd3b6/333?text=PurrDrop+Demo)
+## ✨ คุณสมบัติเด่น
 
-## ✨ Features
+- **🚀 Hybrid Transfer Mode**: 
+  - **P2P Direct**: ส่งไฟล์ตรงระหว่างเครื่องผ่าน LAN/WiFi (เร็วที่สุด ไม่ผ่านเน็ต)
+  - **Streaming Relay**: ระบบสำรองเมื่อ P2P ติด Firewall โดยใช้การ Stream ข้อมูลผ่านเซิร์ฟเวอร์ (ไม่เก็บไฟล์ในเซิร์ฟเวอร์เพื่อความเป็นส่วนตัว)
+- **🔐 End-to-End Encryption (E2EE)**: ไฟล์และข้อความถูกเข้ารหัสด้วย AES-GCM 256-bit ก่อนออกจากเครื่องคุณ มีเพียงผู้รับเท่านั้นที่ถอดรหัสได้
+- **📱 ประสบการณ์แบบ App**: รองรับ PWA (Progressive Web App) ติดตั้งลงเครื่องได้ทั้ง iOS, Android และ Desktop
+- **📂 Multi-file & Folder Support**: เลือกส่งหลายไฟล์พร้อมกัน หรือบีบอัดเป็น Zip อัตโนมัติก่อนส่ง
+- **💬 Text & Link Sharing**: แชร์ข้อความหรือลิงก์หากันได้ทันที พร้อมระบบคัดลอกลง Clipboard
+- **🎨 UI ที่เป็นมิตร**: มาพร้อมระบบธีม (Light/Dark), สัญลักษณ์สัตว์น่ารัก (Critters) แทนตัวตน และระบบจัดการห้องแบบส่วนตัว (Private Room)
 
-| Feature | Description |
-|---------|-------------|
-| 🔗 **WebRTC P2P** | ไฟล์ส่งตรงระหว่าง Browser ไม่ผ่าน Server |
-| 📦 **ไม่จำกัดขนาด** | ส่งไฟล์ใหญ่ได้ รองรับ Streaming สำหรับไฟล์ GB |
-| 💬 **ส่งข้อความ/ลิงก์** | ส่งข้อความและ URL ได้ พร้อมเก็บประวัติและคัดลอก |
-| 🐱 **Cute Characters** | สัตว์น่ารักตาม OS (แก้ไขได้) |
-| 🎨 **Dark/Light Mode** | สลับธีมได้ตามใจชอบ |
-| 📱 **PWA Support** | ติดตั้งเป็น App บนมือถือได้ |
-| 🔔 **Push Notifications** | แจ้งเตือนเมื่อมีไฟล์เข้า |
-| 📋 **Transfer History** | เก็บประวัติการส่งไฟล์และข้อความ 50 รายการ |
-| 🗜️ **Smart ZIP** | รวมหลายไฟล์เป็น ZIP อัตโนมัติ (รองรับ folder structure) |
-| 📶 **QR Code** | สแกน QR เข้าห้องได้ทันที |
-| 🛡️ **Error Boundary** | จัดการ crash ด้วยหน้า Error น่ารักๆ |
-| 📡 **Offline Detection** | แจ้งเตือนเมื่อเน็ตหลุด/กลับมา |
-| 🔍 **SEO Optimized** | OpenGraph และ Twitter Cards สำหรับแชร์ลิงก์ |
-| ⌨️ **Keyboard Navigation** | รองรับการใช้งานด้วยคีย์บอร์ด |
+## 🛠 เทคโนโลยีที่ใช้
 
-## 🔐 Discovery Modes
+- **Frontend**: Next.js 15+, React, TypeScript, Tailwind CSS
+- **Communication**: Socket.io (Signaling & Relay), WebRTC (DataChannels)
+- **Security**: Web Crypto API (ECDH Key Exchange, AES-GCM Encryption)
+- **Optimization**: Web Workers (สำหรับการคำนวณหนัก), Adaptive Chunking (ปรับความเร็วตามเน็ต)
 
-| Mode | Icon | Description |
-|------|------|-------------|
-| **Public** | 🌐 | เห็นทุกคนที่ใช้งาน |
-| **WiFi** | 📶 | เห็นเฉพาะคนที่มี Public IP เดียวกัน |
-| **Private** | 🔐 | เห็นเฉพาะคนที่มีรหัสห้อง + password |
+## 🚀 เริ่มต้นใช้งาน (Local Development)
 
-## � Security Model
+1. **ติดตั้ง Dependencies**:
+   ```bash
+   bun install
+   # หรือ
+   npm install
+   ```
 
-### ✅ สิ่งที่ปลอดภัย
-- **ไฟล์ไม่ผ่าน Server** - ส่งตรง P2P ระหว่าง browsers
-- **WebRTC มี DTLS encryption** - ข้อมูลเข้ารหัสระหว่างทาง
-- **Private mode** - ใช้รหัสห้อง 5 หลัก + password (optional)
-- **Server เห็นแค่ metadata** - ชื่อ, device type, IP (สำหรับ matching)
+2. **ตั้งค่า Environment**:
+   สร้างไฟล์ `.env` (ดูตัวอย่างที่ `.env.example`)
+   ```env
+   PORT=3000
+   ALLOWED_ORIGINS=http://localhost:3000
+   ```
 
-### ⚠️ ข้อควรระวัง
-- **Public mode** - ทุกคนที่เปิดเว็บจะเห็นคุณ
-- **WiFi mode บน Cloud** - ใช้ Public IP matching ซึ่งอาจไม่แม่นยำ 100%
-- **ไม่มี E2E encryption เพิ่มเติม** - พึ่ง DTLS ของ WebRTC
+3. **รันโหมด Development**:
+   ```bash
+   npm run dev
+   ```
 
-## ⚡ Known Limitations
+4. **สร้างและรันโหมด Production**:
+   ```bash
+   npm run build
+   npm start
+   ```
 
-| ข้อจำกัด | สาเหตุ | วิธีแก้ |
-|---------|--------|--------|
-| **WiFi mode อาจเห็นคนผิด** | ISP บางเจ้าใช้ CGNAT (IP ซ้ำกัน) | ใช้ Private mode แทน |
-| **ส่งไฟล์ข้าม network ไม่ได้** | NAT บางประเภทบล็อก WebRTC | ใช้ WiFi เดียวกัน หรือ hotspot |
-| **iOS Safari download** | ไม่รองรับ download attribute | เปิด tab ใหม่ให้ save เอง |
-| **VPN ทำให้ไม่เจอกัน** | IP เปลี่ยน | ปิด VPN หรือใช้ Private mode |
+## 🛡 การรักษาความปลอดภัยและความเป็นส่วนตัว
 
-## 🚀 Quick Start
+- **No Storage**: เซิร์ฟเวอร์ทำหน้าที่เป็นเพียงทางผ่าน (Signaling/Relay) ข้อมูลไฟล์จะไม่ถูกเขียนลง Disk ของเซิร์ฟเวอร์
+- **Local Encryption**: กุญแจเข้ารหัส (Secret Key) ถูกสร้างขึ้นใหม่ทุกครั้งที่มีการเชื่อมต่อและไม่เคยถูกส่งไปยังเซิร์ฟเวอร์
+- **Identity Privacy**: ไม่มีการเก็บข้อมูลส่วนตัว ใช้เพียงชื่อสุ่มและไอคอนรูปสัตว์
 
-**ต้องติดตั้ง Bun ก่อน:** https://bun.sh
+## 📄 ใบอนุญาต
 
-```bash
-# Clone
-git clone https://github.com/DDME36/PurrDrop.git
-cd PurrDrop
-
-# Install
-bun install
-
-# Development
-bun run dev
-
-# Production build
-bun run build
-bun start
-```
-
-เปิด http://localhost:3000
-
-## 🌐 Deploy
-
-### Render (แนะนำ - Free Tier)
-
-**วิธีที่ 1: ใช้ Blueprint (ง่ายที่สุด)**
-1. Fork repo นี้
-2. ไปที่ [Render Dashboard](https://dashboard.render.com)
-3. คลิก "New" → "Blueprint"
-4. เชื่อมต่อ GitHub repo ของคุณ
-5. Render จะอ่าน `render.yaml` และตั้งค่าให้อัตโนมัติ
-
-**วิธีที่ 2: Manual Setup**
-1. Fork repo นี้
-2. สร้าง Web Service ใหม่บน [Render](https://render.com)
-3. เชื่อมต่อ GitHub repo
-4. ตั้งค่า:
-   - Runtime: ตั้ง Environment Variable `BUN_VERSION=1.2.2`
-   - Build Command: `bun install && bun run build`
-   - Start Command: `bun start`
-   - Health Check Path: `/health`
-
-**Environment Variables (Optional):**
-- `BUN_VERSION`: `1.2.2` (หรือเวอร์ชันล่าสุด)
-- `ALLOWED_ORIGINS`: จำกัด CORS (เช่น `https://yourdomain.com`)
-- `TURN_USERNAME`: TURN server username จาก [Metered.ca](https://www.metered.ca/tools/openrelay/)
-- `TURN_CREDENTIAL`: TURN server credential
-
-Render จะ auto-deploy ทุกครั้งที่ push ไป GitHub!
-
-## 🐾 Characters by OS
-
-| OS | Emoji | Name |
-|----|-------|------|
-| iOS/macOS | 🐱 | Shuba |
-| iPadOS | 🦔 | Spike |
-| Windows | 🐼 | Mochi |
-| Android | 🐰 | Loppy |
-| Linux | 🦉 | Hoot |
-| Unknown | 🦊 | Foxy |
-
-## 📱 How to Use
-
-### ส่งไฟล์
-1. **เปิดเว็บ** บนอุปกรณ์ที่ 1
-2. **เปิดเว็บเดียวกัน** บนอุปกรณ์ที่ 2
-3. **เลือกโหมด** (Public/WiFi/Private)
-4. **คลิกที่ตัวละคร** ของเพื่อน → เลือกไฟล์
-5. **อีกเครื่องกด** "รับเลย!" 🎉
-
-### ส่งข้อความ/ลิงก์
-1. **กดปุ่ม 📄** (Floating button ล่างขวา)
-2. **พิมพ์ข้อความ** หรือวาง URL
-3. **เลือกเพื่อน** ที่จะส่งให้
-4. **กดส่ง** - ข้อความจะถูกเก็บในประวัติพร้อมปุ่มคัดลอก
-
-### ดูประวัติ
-- **กดไอคอน 📋** ที่มุมขวาบน
-- **ดูข้อความย้อนหลัง** และคัดลอกได้ทันที
-- **ดูไฟล์ที่ส่ง/รับ** ทั้งหมด
-
-## 🛠️ Tech Stack
-
-- **Frontend**: Next.js 16, React 19, Tailwind CSS 4
-- **Runtime**: Bun (fast JavaScript runtime)
-- **Real-time**: Socket.io (signaling)
-- **Transfer**: WebRTC DataChannel (P2P)
-- **PWA**: Service Worker
-
-## 📊 Architecture
-
-```
-┌─────────────┐     Socket.io      ┌─────────────┐
-│   User A    │◄──────────────────►│   Server    │
-│  (Browser)  │    (Signaling)     │  (Render)   │
-└──────┬──────┘                    └─────────────┘
-       │                                  
-       │         WebRTC (P2P)             
-       │◄────────────────────────────────►
-       │                                  
-┌──────▼──────┐                    
-│   User B    │                    
-│  (Browser)  │                    
-└─────────────┘                    
-```
-
-**Note**: ไฟล์ส่งตรง P2P ไม่ผ่าน Server!
-
-## 🔒 Security
-
-- WebRTC มี DTLS encryption ในตัว
-- Private mode ใช้รหัสห้อง 5 หลัก + password (optional)
-- ไม่เก็บไฟล์บน server
-
-## 📝 License
-
-[MIT](./LICENSE)
-
-## 🤝 Contributing
-
-Pull requests are welcome! 
-
-1. Fork the repo
-2. Create your feature branch (`git checkout -b feature/amazing`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing`)
-5. Open a Pull Request
+โปรเจคนี้อยู่ภายใต้ใบอนุญาต [MIT License](LICENSE) 
 
 ---
-
-Made with 🐱 by [DDME36](https://github.com/DDME36)
+สร้างด้วย ❤️ เพื่อการส่งไฟล์ที่อิสระและปลอดภัยที่สุด

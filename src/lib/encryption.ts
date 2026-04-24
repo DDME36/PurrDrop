@@ -53,7 +53,7 @@ export async function deriveSharedSecret(privateKey: CryptoKey, publicKey: Crypt
 export async function encryptChunk(chunk: ArrayBuffer, key: CryptoKey): Promise<{ data: ArrayBuffer; iv: Uint8Array }> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     key,
     chunk
   );
@@ -63,7 +63,7 @@ export async function encryptChunk(chunk: ArrayBuffer, key: CryptoKey): Promise<
 // Decrypt a chunk
 export async function decryptChunk(encryptedData: ArrayBuffer, iv: Uint8Array, key: CryptoKey): Promise<ArrayBuffer> {
   return await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     key,
     encryptedData
   );
@@ -74,7 +74,7 @@ export async function encryptText(text: string, key: CryptoKey): Promise<{ data:
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(text);
   const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     key,
     encoded
   );
@@ -91,7 +91,7 @@ export async function decryptText(encryptedBase64: string, ivBase64: string, key
   const iv = new Uint8Array(atob(ivBase64).split('').map(c => c.charCodeAt(0)));
   
   const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     key,
     encrypted
   );

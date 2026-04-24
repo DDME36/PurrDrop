@@ -322,9 +322,6 @@ app.prepare().then(() => {
         console.log(`✅ Relay-end: ${fileId} from ${socket.id} to ${to}`);
       }
       
-      // Clean up chunk timer
-      relayChunkTimers.delete(fileId);
-      
       // Delay relay-end slightly to ensure all chunks arrive first
       // This prevents "unexpected end of archive" errors
       setTimeout(() => {
