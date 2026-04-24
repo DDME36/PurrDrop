@@ -15,11 +15,28 @@ export function usePWA() {
   const [isInstallable, setIsInstallable] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Detect iOS
+    const checkIsIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+      (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+    setIsIOS(checkIsIOS);
+
     // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true) {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    
+    if (standalone) {
       setIsInstalled(true);
+    } else if (checkIsIOS) {
+      // iOS doesn't support beforeinstallprompt, but it is installable via Share menu.
+      // We check if it's Safari (other browsers on iOS can't install PWAs to homescreen easily)
+      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+      if (isSafari) {
+        setIsInstallable(true);
+      }
     }
 
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -47,6 +64,11 @@ export function usePWA() {
   }, []);
 
   const promptInstall = useCallback(async () => {
+    if (isIOS) {
+      alert("📱 เพื่อติดตั้งแอปบน iOS:\n1. แตะปุ่ม 'แชร์' (Share) ด้านล่าง\n2. เลือก 'เพิ่มไปยังหน้าจอโฮม' (Add to Home Screen)");
+      return;
+    }
+
     if (!deferredPrompt) return;
     
     deferredPrompt.prompt();
@@ -57,7 +79,7 @@ export function usePWA() {
       setIsInstallable(false);
     }
     setDeferredPrompt(null);
-  }, [deferredPrompt]);
+  }, [deferredPrompt, isIOS]);
 
-  return { isInstallable, isInstalled, promptInstall };
+  return { isInstallable, isInstalled, promptInstall, isIOS };
 }

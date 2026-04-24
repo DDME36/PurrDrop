@@ -988,7 +988,7 @@ export function usePeerConnection() {
   useEffect(() => { sendFileViaWebRTCRef.current = sendFileViaWebRTC; }, [sendFileViaWebRTC]);
 
   const sendTextViaWebRTC = useCallback(async (peerId: string, text: string, targetPeer: Peer) => {
-    console.log(`📤 Starting Text transfer to ${peerId}`);
+    console.log(`📤 Sending Text message to ${peerId} via Socket`);
     
     // Check text size limit (1MB max for safety)
     const textSize = new Blob([text]).size;
@@ -1004,103 +1004,12 @@ export function usePeerConnection() {
       setTimeout(() => setTransferResult(null), 5000);
       return;
     }
-    
-    // Set pending UI state to inform user we are trying to connect
-    setTransferResult(null);
-    setTransfer({
-      peerId,
-      peerName: targetPeer.name,
-      fileName: 'กำลังส่งข้อความ...',
-      fileSize: textSize,
-      progress: 0,
-      status: 'sending',
-    });
 
     try {
-      const pc = peerConnectionsRef.current.get(peerId) || createPeerConnection(peerId);
+      if (!socketRef.current) throw new Error('Socket not connected');
+      socketRef.current.emit('text-offer', { to: peerId, text });
       
-      let dc = dataChannelsRef.current.get(peerId);
-      if (!dc || dc.readyState === 'closed' || dc.readyState === 'closing') {
-        dc = pc.createDataChannel('text-transfer', { ordered: true });
-        dataChannelsRef.current.set(peerId, dc);
-        setupDataChannel(dc, peerId);
-        
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        
-        if (!socketRef.current) throw new Error('Socket not connected');
-        socketRef.current.emit('rtc-offer', { to: peerId, offer });
-        
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Connection timeout')), 20000); // Increased to 20s for long text
-          
-          const handleOpen = () => { clearTimeout(timeout); clean(); resolve(); };
-          const handleClose = () => { clearTimeout(timeout); clean(); reject(new Error('DataChannel closed before open')); };
-          const handleError = () => { clearTimeout(timeout); clean(); reject(new Error('DataChannel error')); };
-          
-          const clean = () => {
-            dc!.removeEventListener('open', handleOpen);
-            dc!.removeEventListener('close', handleClose);
-            dc!.removeEventListener('error', handleError);
-          };
-          
-          dc!.addEventListener('open', handleOpen);
-          dc!.addEventListener('close', handleClose);
-          dc!.addEventListener('error', handleError);
-
-          if (dc!.readyState === 'open') { clearTimeout(timeout); clean(); resolve(); }
-        });
-      }
-
-      // For long text, split into chunks to avoid DataChannel size limits
-      const MAX_CHUNK_SIZE = 16000; // Safe size for all browsers
-      if (text.length > MAX_CHUNK_SIZE) {
-        const textId = uuidv4();
-        const chunks = Math.ceil(text.length / MAX_CHUNK_SIZE);
-        
-        // Send start message
-        dc.send(JSON.stringify({
-          type: 'text-start',
-          textId,
-          totalChunks: chunks,
-          totalLength: text.length
-        }));
-
-        // Send chunks with progress updates
-        for (let i = 0; i < chunks; i++) {
-          const chunk = text.slice(i * MAX_CHUNK_SIZE, (i + 1) * MAX_CHUNK_SIZE);
-          dc.send(JSON.stringify({
-            type: 'text-chunk',
-            textId,
-            chunkIndex: i,
-            chunk
-          }));
-          
-          // Update progress
-          const progress = Math.round(((i + 1) / chunks) * 100);
-          setTransfer(prev => prev ? { ...prev, progress } : null);
-          
-          // Small delay to prevent overwhelming the channel
-          await new Promise(r => setTimeout(r, 10));
-        }
-
-        // Send end message
-        dc.send(JSON.stringify({
-          type: 'text-end',
-          textId
-        }));
-        
-        console.log(`📤 Sent long text in ${chunks} chunks`);
-      } else {
-        // Short text - send directly
-        dc.send(JSON.stringify({
-          type: 'text-message',
-          payload: text
-        }));
-        console.log('📤 Sent text message');
-      }
-      
-      setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
+      // Notify user of success immediately since it's a small socket emission
       setTransferResult({
         success: true,
         fileName: 'ข้อความ/ลิงก์',
@@ -1110,29 +1019,19 @@ export function usePeerConnection() {
         type: 'text',
         textContent: text,
       });
-      setTimeout(() => setTransfer(null), 3000);
-
+      setTimeout(() => setTransferResult(null), 3000);
     } catch (err) {
-      console.error('❌ Text transfer error:', err);
-      
-      // Notify user of failure
-      setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
+      console.error('❌ Text sending error:', err);
       setTransferResult({
         success: false,
-        fileName: 'ข้อความ/ลิงก์',
+        fileName: 'ส่งข้อความไม่สำเร็จ',
         fileSize: textSize,
         peerName: targetPeer.name,
         direction: 'sent',
       });
-      
-      // Clean up connection to force a fresh ICE restart next time
-      peerConnectionsRef.current.get(peerId)?.close();
-      peerConnectionsRef.current.delete(peerId);
-      dataChannelsRef.current.delete(peerId);
-      
-      setTimeout(() => setTransfer(null), 5000);
+      setTimeout(() => setTransferResult(null), 5000);
     }
-  }, [createPeerConnection, setupDataChannel]);
+  }, []);
 
   // Initialize socket connection
   useEffect(() => {
@@ -1349,6 +1248,25 @@ export function usePeerConnection() {
 
     socket.on('peer-updated', (updatedPeer: PeerWithMeta) => {
       setPeers(prev => prev.map(p => p.id === updatedPeer.id ? updatedPeer : p));
+    });
+
+    // Text signaling
+    socket.on('text-offer', ({ from, text, timestamp }: { from: Peer; text: string; timestamp: number }) => {
+      console.log('💬 Text offer received from:', from.name);
+      setTextMessage({
+        from,
+        text,
+        timestamp: timestamp || Date.now()
+      });
+      
+      // Show notification for received text
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(`ข้อความจาก ${from.name}`, {
+          body: text.length > 100 ? text.substring(0, 100) + '...' : text,
+          icon: '/icon-192.png',
+          tag: 'text-message',
+        });
+      }
     });
 
     // File signaling
