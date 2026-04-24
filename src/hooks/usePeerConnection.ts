@@ -74,6 +74,7 @@ export function usePeerConnection() {
   const [textMessage, setTextMessage] = useState<TextMessage | null>(null);
   const [transfer, setTransfer] = useState<TransferProgress | null>(null);
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
+  const [forceDisconnectReason, setForceDisconnectReason] = useState<string | null>(null);
 
   // Refs for tracking reconnection state across renders
   const discoveryModeRef = useRef<DiscoveryMode>('public');
@@ -140,7 +141,15 @@ export function usePeerConnection() {
       // DataChannel errors are often empty objects - this is normal WebRTC behavior
       // The actual error details are usually in the RTCPeerConnection state
       const peer = peersRef.current.find(p => p.id === peerId);
-      console.warn(`⚠️ DataChannel error with ${peer?.name || peerId}`, e);
+      const pc = peerConnectionsRef.current.get(peerId);
+      
+      console.warn(`⚠️ DataChannel error with ${peer?.name || peerId}`);
+      console.warn('📊 Error event:', e);
+      console.warn('📊 DataChannel state:', channel.readyState);
+      if (pc) {
+        console.warn('📊 PeerConnection ICE state:', pc.iceConnectionState);
+        console.warn('📊 PeerConnection connection state:', pc.connectionState);
+      }
       
       // Don't show error to user unless it's during an active transfer
       if (transfer && transfer.peerId === peerId && transfer.status !== 'complete') {
@@ -306,7 +315,12 @@ export function usePeerConnection() {
             receivingTextsRef.current.delete(msg.textId);
           }
         } catch (err) {
-          console.error('Parse error:', err);
+          console.error('❌ Parse error:', err);
+          console.error('📊 Error details:', {
+            message: err instanceof Error ? err.message : 'Unknown error',
+            data: typeof e.data === 'string' ? e.data.substring(0, 100) : 'binary',
+            peerId,
+          });
         }
       } else {
         // Binary chunk
@@ -987,11 +1001,15 @@ export function usePeerConnection() {
   useEffect(() => { sendFileViaRelayRef.current = sendFileViaRelay; }, [sendFileViaRelay]);
   useEffect(() => { sendFileViaWebRTCRef.current = sendFileViaWebRTC; }, [sendFileViaWebRTC]);
 
-  const sendTextViaWebRTC = useCallback(async (peerId: string, text: string, targetPeer: Peer) => {
-    console.log(`📤 Sending Text message to ${peerId} via Socket`);
+  const sendText = useCallback(async (peerId: string, text: string, targetPeer: Peer) => {
+    console.log(`📤 Sending Text message to ${peerId} via Socket.IO`);
+    console.log(`📊 Text length: ${text.length} chars`);
+    console.log(`🔌 Socket status: ${socketRef.current?.connected ? 'connected' : 'disconnected'}`);
     
     // Check text size limit (1MB max for safety)
     const textSize = new Blob([text]).size;
+    console.log(`📊 Text size: ${textSize} bytes`);
+    
     if (textSize > 1024 * 1024) {
       console.error('❌ Text too large:', textSize);
       setTransferResult({
@@ -1006,8 +1024,19 @@ export function usePeerConnection() {
     }
 
     try {
-      if (!socketRef.current) throw new Error('Socket not connected');
+      if (!socketRef.current) {
+        console.error('❌ Socket ref is null');
+        throw new Error('Socket not connected');
+      }
+      
+      if (!socketRef.current.connected) {
+        console.error('❌ Socket is not connected');
+        throw new Error('Socket disconnected');
+      }
+      
+      console.log('📤 Emitting text-offer via Socket.IO...');
       socketRef.current.emit('text-offer', { to: peerId, text });
+      console.log('✅ text-offer emitted successfully via Socket.IO');
       
       // Notify user of success immediately since it's a small socket emission
       setTransferResult({
@@ -1022,6 +1051,13 @@ export function usePeerConnection() {
       setTimeout(() => setTransferResult(null), 3000);
     } catch (err) {
       console.error('❌ Text sending error:', err);
+      console.error('❌ Error details:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : undefined,
+        socketConnected: socketRef.current?.connected,
+        socketId: socketRef.current?.id,
+      });
+      
       setTransferResult({
         success: false,
         fileName: 'ส่งข้อความไม่สำเร็จ',
@@ -1192,9 +1228,7 @@ export function usePeerConnection() {
       console.log(`⚠️ Force disconnect: ${reason}`);
       setConnectionStatus('disconnected');
       socket.disconnect();
-      // Show a toast or alert to user
-      alert(`การเชื่อมต่อถูกตัด: ${reason}`);
-      window.location.reload(); // Reload to get a clean state or just stop
+      setForceDisconnectReason(reason);
     });
 
     socket.on('room-error', ({ error, message }: { error: string; message: string }) => {
@@ -1281,6 +1315,11 @@ export function usePeerConnection() {
       if (pending) {
         console.log(`📤 Starting file transfer: ${pending.file.name} (${pending.file.size} bytes)`);
         
+        // Clear timeout
+        if ((pending as any)._timeout) {
+          clearTimeout((pending as any)._timeout);
+        }
+        
         // ลบออกจาก pending ก่อนส่ง
         pendingFilesRef.current.delete(fileId);
         
@@ -1308,8 +1347,18 @@ export function usePeerConnection() {
       }
     });
 
-    socket.on('file-reject', () => {
+    socket.on('file-reject', ({ fileId }: { fileId?: string }) => {
       console.log('❌ File rejected');
+      
+      // Clear timeout if fileId provided
+      if (fileId) {
+        const pending = pendingFilesRef.current.get(fileId);
+        if (pending && (pending as any)._timeout) {
+          clearTimeout((pending as any)._timeout);
+        }
+        pendingFilesRef.current.delete(fileId);
+      }
+      
       setTransfer(null);
     });
 
@@ -1673,13 +1722,43 @@ export function usePeerConnection() {
         status: 'pending',
       });
 
+      // Set timeout for pending state (30 seconds)
+      const pendingTimeout = setTimeout(() => {
+        if (pendingFilesRef.current.has(fileId)) {
+          console.log('⏱️ File offer timeout - no response from peer');
+          pendingFilesRef.current.delete(fileId);
+          setTransfer(prev => {
+            if (prev && prev.status === 'pending') {
+              return { ...prev, status: 'error' };
+            }
+            return prev;
+          });
+          setTransferResult({
+            success: false,
+            fileName: file.name,
+            fileSize: file.size,
+            peerName: peer.name,
+            direction: 'sent',
+          });
+          setTimeout(() => setTransfer(null), 3000);
+        }
+      }, 30000);
+
+      // Store timeout ID for cleanup
+      (pendingFilesRef.current.get(fileId) as any)._timeout = pendingTimeout;
+
       console.log(`📤 Sending file offer: ${file.name} (${mimeType}) to ${peer.name}`);
+      console.log(`📊 File details: size=${file.size}, type=${file.type}, mimeType=${mimeType}`);
+      console.log(`🔌 Socket connected: ${socketRef.current.connected}, id: ${socketRef.current.id}`);
+      
       socketRef.current.emit('file-offer', {
         to: peer.id,
         from: myPeerRef.current,
         file: { name: file.name, size: file.size, type: mimeType },
         fileId,
       });
+      
+      console.log('✅ file-offer emitted successfully');
     } catch (err) {
       const appError = handleError(err, 'sendFile');
       logError(appError, `File: ${file?.name || 'unknown'}`);
@@ -1788,8 +1867,9 @@ export function usePeerConnection() {
     textMessage,
     transfer,
     transferResult,
+    forceDisconnectReason,
     sendFile,
-    sendText: sendTextViaWebRTC,
+    sendText,
     acceptFile,
     rejectFile,
     updateName,

@@ -75,6 +75,7 @@ const XIcon = () => (
 interface HelpModalProps {
   show: boolean;
   onClose: () => void;
+  onShowFeedback: () => void;
 }
 
 function FAQItem({ question, answer }: { question: string; answer: string }) {
@@ -92,7 +93,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 const STEP_COLORS = ['var(--accent-pink)', 'var(--accent-mint)', 'var(--accent-peach)', 'var(--accent-lavender)'];
 
-export function HelpModal({ show, onClose }: HelpModalProps) {
+export function HelpModal({ show, onClose, onShowFeedback }: HelpModalProps) {
   const [activeTab, setActiveTab] = useState<'basic' | 'text' | 'history' | 'troubleshoot'>('basic');
 
   if (!show) return null;
@@ -234,6 +235,20 @@ export function HelpModal({ show, onClose }: HelpModalProps) {
                 question="ส่งไฟล์ผ่าน 4G/5G ได้ไหม?"
                 answer="ได้ครับ ให้ใช้ 'โหมดส่วนตัว' แล้วแชร์รหัสห้องให้เพื่อน"
               />
+
+              <div className="help-feedback-cta" style={{ marginTop: '20px', textAlign: 'center', padding: '16px', background: 'rgba(0,0,0,0.03)', borderRadius: '16px' }}>
+                <p style={{ fontSize: '13px', marginBottom: '10px', color: 'var(--text-secondary)' }}>พบปัญหาอื่นๆ หรืออยากแนะนำ?</p>
+                <button 
+                  className="btn btn-pastel pink" 
+                  onClick={() => {
+                    onShowFeedback();
+                    onClose();
+                  }}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  ส่งข้อเสนอแนะ / แจ้งบัค
+                </button>
+              </div>
             </div>
           )}
         </div>

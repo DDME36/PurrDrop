@@ -42,6 +42,7 @@ export function FeedbackModal({ show, onClose }: FeedbackModalProps) {
   const [error, setError] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   if (!show) return null;
 
@@ -49,10 +50,12 @@ export function FeedbackModal({ show, onClose }: FeedbackModalProps) {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       if (selectedFile.size > 8 * 1024 * 1024) { // 8MB limit
-        alert('ไฟล์ต้องมีขนาดไม่เกิน 8MB');
+        setFileError('ไฟล์ต้องมีขนาดไม่เกิน 8MB');
+        setTimeout(() => setFileError(null), 3000);
         return;
       }
       setFile(selectedFile);
+      setFileError(null);
       const objectUrl = URL.createObjectURL(selectedFile);
       setPreview(objectUrl);
     }
@@ -119,6 +122,12 @@ export function FeedbackModal({ show, onClose }: FeedbackModalProps) {
             {error && (
               <div className="feedback-error">
                 <XCircleIcon /> ส่งไม่สำเร็จ กรุณาลองใหม่
+              </div>
+            )}
+            
+            {fileError && (
+              <div className="feedback-error">
+                <XCircleIcon /> {fileError}
               </div>
             )}
             

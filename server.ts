@@ -74,6 +74,16 @@ app.prepare().then(() => {
   const STALE_PEER_INTERVAL = 60 * 1000; // Check for stale peers every 60s
   const RELAY_CHUNK_THROTTLE = 10; // ms - throttle relay chunks
 
+  // Helper: Find socket.id from peer.id
+  function findSocketIdByPeerId(peerId: string): string | null {
+    for (const [socketId, peer] of peers.entries()) {
+      if (peer.id === peerId) {
+        return socketId;
+      }
+    }
+    return null;
+  }
+
   io.on('connection', (socket: Socket) => {
     if (peers.size >= MAX_PEERS) {
       socket.emit('server-full', { message: 'เซิร์ฟเวอร์เต็ม กรุณาลองใหม่อีกครั้ง' });
@@ -187,21 +197,39 @@ app.prepare().then(() => {
 
     // WebRTC signaling
     socket.on('rtc-offer', ({ to, offer }: { to: string; offer: RTCSessionDescriptionInit }) => {
-      io.to(to).emit('rtc-offer', {
+      const targetSocketId = findSocketIdByPeerId(to);
+      if (!targetSocketId) {
+        console.error(`❌ rtc-offer: Target peer not found: ${to}`);
+        return;
+      }
+      
+      io.to(targetSocketId).emit('rtc-offer', {
         from: socket.id,
         offer
       });
     });
 
     socket.on('rtc-answer', ({ to, answer }: { to: string; answer: RTCSessionDescriptionInit }) => {
-      io.to(to).emit('rtc-answer', {
+      const targetSocketId = findSocketIdByPeerId(to);
+      if (!targetSocketId) {
+        console.error(`❌ rtc-answer: Target peer not found: ${to}`);
+        return;
+      }
+      
+      io.to(targetSocketId).emit('rtc-answer', {
         from: socket.id,
         answer
       });
     });
 
     socket.on('rtc-ice', ({ to, candidate }: { to: string; candidate: RTCIceCandidateInit }) => {
-      io.to(to).emit('rtc-ice', {
+      const targetSocketId = findSocketIdByPeerId(to);
+      if (!targetSocketId) {
+        console.error(`❌ rtc-ice: Target peer not found: ${to}`);
+        return;
+      }
+      
+      io.to(targetSocketId).emit('rtc-ice', {
         from: socket.id,
         candidate
       });
@@ -212,7 +240,16 @@ app.prepare().then(() => {
       const fromPeer = peers.get(socket.id);
       if (!fromPeer) return;
       
-      io.to(to).emit('file-offer', {
+      const targetSocketId = findSocketIdByPeerId(to);
+      if (!targetSocketId) {
+        console.error(`❌ file-offer: Target peer not found: ${to}`);
+        socket.emit('file-error', { error: 'ผู้รับไม่ได้เชื่อมต่ออยู่' });
+        return;
+      }
+      
+      console.log(`📤 Forwarding file-offer: ${file.name} from ${fromPeer.name} to ${targetSocketId}`);
+      
+      io.to(targetSocketId).emit('file-offer', {
         from: fromPeer,
         file,
         fileId
@@ -220,14 +257,30 @@ app.prepare().then(() => {
     });
 
     socket.on('file-accept', ({ to, fileId }: { to: string; fileId: string }) => {
-      io.to(to).emit('file-accept', {
+      const targetSocketId = findSocketIdByPeerId(to);
+      if (!targetSocketId) {
+        console.error(`❌ file-accept: Target peer not found: ${to}`);
+        return;
+      }
+      
+      console.log(`✅ Forwarding file-accept from ${socket.id} to ${targetSocketId}`);
+      
+      io.to(targetSocketId).emit('file-accept', {
         from: socket.id,
         fileId
       });
     });
 
     socket.on('file-reject', ({ to, fileId }: { to: string; fileId: string }) => {
-      io.to(to).emit('file-reject', {
+      const targetSocketId = findSocketIdByPeerId(to);
+      if (!targetSocketId) {
+        console.error(`❌ file-reject: Target peer not found: ${to}`);
+        return;
+      }
+      
+      console.log(`❌ Forwarding file-reject from ${socket.id} to ${targetSocketId}`);
+      
+      io.to(targetSocketId).emit('file-reject', {
         from: socket.id,
         fileId
       });
@@ -339,7 +392,16 @@ app.prepare().then(() => {
       const fromPeer = peers.get(socket.id);
       if (!fromPeer) return;
       
-      io.to(to).emit('text-offer', {
+      const targetSocketId = findSocketIdByPeerId(to);
+      if (!targetSocketId) {
+        console.error(`❌ text-offer: Target peer not found: ${to}`);
+        socket.emit('text-error', { error: 'ผู้รับไม่ได้เชื่อมต่ออยู่' });
+        return;
+      }
+      
+      console.log(`💬 Forwarding text from ${fromPeer.name} to ${targetSocketId}`);
+      
+      io.to(targetSocketId).emit('text-offer', {
         from: fromPeer,
         text,
         timestamp: Date.now()

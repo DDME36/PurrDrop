@@ -24,6 +24,8 @@ import {
   FeedbackModal,
   TextShareModal,
   ScannerModal,
+  ErrorModal,
+  IOSInstallModal,
 } from '@/components/modals';
 import { useSound } from '@/hooks/useSound';
 import { usePeerConnection } from '@/hooks/usePeerConnection';
@@ -51,6 +53,7 @@ export default function Home() {
     textMessage,
     transfer,
     transferResult,
+    forceDisconnectReason,
     sendFile,
     sendText,
     acceptFile,
@@ -66,7 +69,7 @@ export default function Home() {
   const { muted, toggle: toggleMute, play, vibrate } = useSound();
   const { isDark, toggleTheme } = useTheme();
   const { requestPermission, notifyFileOffer, notifyTransferComplete, notifyPeerJoined } = useNotification();
-  const { isInstallable, promptInstall } = usePWA();
+  const { isInstallable, promptInstall, showIOSModal, closeIOSModal } = usePWA();
 
   const [showNameModal, setShowNameModal] = useState(false);
   const [showEmojiModal, setShowEmojiModal] = useState(false);
@@ -309,10 +312,17 @@ export default function Home() {
   }, [sendFile]);
 
   const handleSelectPeer = useCallback((peer: Peer) => {
+    console.log('🎯 handleSelectPeer called:', peer.name, peer.id);
+    console.log('📊 Current state:', {
+      connected,
+      myPeer: myPeer?.name,
+      peersCount: peers.length
+    });
     vibrate(15);
     selectedPeerRef.current = peer;
+    console.log('📂 Opening file input...');
     fileInputRef.current?.click();
-  }, [vibrate]);
+  }, [vibrate, connected, myPeer, peers.length]);
 
   const handleDropFiles = useCallback((peer: Peer, files: { file: File, path: string }[]) => {
     vibrate([20, 50, 20]);
@@ -417,6 +427,12 @@ export default function Home() {
     setHistory(prev => prev.filter(item => item.id !== id));
   }, []);
 
+  const handleQRScan = useCallback((code: string) => {
+    setMode('private', code);
+    setShowScannerModal(false);
+    toastRef.current?.show(`กำลังเข้าร่วมห้อง ${code}...`, 'info');
+  }, [setMode]);
+
   // Performance Optimization: Pause animations when tab is not visible
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -486,15 +502,6 @@ export default function Home() {
         directory=""
         multiple
         style={{ display: 'none' }}
-      />
-
-      <ScannerModal
-        show={showScannerModal}
-        onScan={(code) => {
-          setMode('private', code);
-          toastRef.current?.show(`กำลังเข้าร่วมห้อง ${code}...`, 'info');
-        }}
-        onClose={() => setShowScannerModal(false)}
       />
 
       <div id="toastContainer" />
@@ -583,28 +590,8 @@ export default function Home() {
         />
 
         {/* Show fixed footer only when peers exist, or always on desktop */}
-        <Footer onFeedback={() => setShowFeedbackModal(true)} hasPeers={peers.length > 0} />
+        <Footer hasPeers={peers.length > 0} />
       </div>
-
-      {/* Floating Action Button for Text Share */}
-      {peers.length > 0 && (
-        <div className="fab-container">
-          <button 
-            className="fab-btn" 
-            onClick={() => setShowTextShareModal(true)}
-            title="ส่งข้อความ/ลิงก์"
-            aria-label="ส่งข้อความหรือลิงก์"
-          >
-            <svg className="fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-              <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-              <path d="M10 9H8"/>
-              <path d="M16 13H8"/>
-              <path d="M16 17H8"/>
-            </svg>
-          </button>
-        </div>
-      )}
 
       {/* Modals */}
       {fileOffer && (
@@ -620,7 +607,11 @@ export default function Home() {
       <NameModal
         show={showNameModal}
         currentName={myPeer?.name || ''}
-        onSubmit={updateName}
+        onSubmit={(name) => {
+          updateName(name);
+          requestPermission();
+          setShowNameModal(false);
+        }}
         onClose={() => setShowNameModal(false)}
       />
 
@@ -641,6 +632,7 @@ export default function Home() {
 
       <HelpModal
         show={showHelpModal}
+        onShowFeedback={() => setShowFeedbackModal(true)}
         onClose={() => setShowHelpModal(false)}
       />
 
@@ -666,6 +658,31 @@ export default function Home() {
           toastRef.current?.show(`กำลังส่งข้อความให้ ${peer.name}...`, 'info');
         }}
         onClose={() => setShowTextShareModal(false)}
+      />
+
+      <ErrorModal
+        show={!!forceDisconnectReason}
+        error={forceDisconnectReason ? {
+          type: 'connection',
+          message: forceDisconnectReason,
+          userMessage: 'การเชื่อมต่อถูกตัด',
+          suggestedAction: forceDisconnectReason,
+          originalError: null,
+          canRetry: true
+        } : null}
+        onClose={() => window.location.reload()}
+        onRetry={() => window.location.reload()}
+      />
+
+      <IOSInstallModal
+        show={showIOSModal}
+        onClose={closeIOSModal}
+      />
+
+      <ScannerModal
+        show={showScannerModal}
+        onScan={handleQRScan}
+        onClose={() => setShowScannerModal(false)}
       />
     </>
   );

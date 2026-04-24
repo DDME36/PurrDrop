@@ -50,6 +50,7 @@ const CheckIcon = () => (
 export function BrowserWarning() {
   const [showWarning, setShowWarning] = useState<'inapp' | 'duplicate' | null>(null);
   const [currentUrl, setCurrentUrl] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -134,7 +135,8 @@ export function BrowserWarning() {
   const handleCopyUrl = async () => {
     try {
       await navigator.clipboard.writeText(currentUrl);
-      alert('คัดลอก URL แล้ว!\n\n1. เปิด Safari หรือ Chrome\n2. วาง URL ในช่อง address\n3. กด Enter');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback for older browsers
       const textArea = document.createElement('textarea');
@@ -145,7 +147,8 @@ export function BrowserWarning() {
       textArea.select();
       document.execCommand('copy');
       document.body.removeChild(textArea);
-      alert('คัดลอก URL แล้ว!\n\n1. เปิด Safari หรือ Chrome\n2. วาง URL ในช่อง address\n3. กด Enter');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -172,9 +175,14 @@ export function BrowserWarning() {
               กรุณาคัดลอก URL แล้วเปิดใน Safari หรือ Chrome
             </p>
             <div className="warning-url">{currentUrl}</div>
+            {copied && (
+              <div className="copy-success">
+                <CheckIcon /> คัดลอกแล้ว! เปิดใน Safari หรือ Chrome
+              </div>
+            )}
             <div className="warning-actions">
               <button className="btn btn-accept" onClick={handleCopyUrl}>
-                <CopyIcon /> คัดลอก URL
+                <CopyIcon /> {copied ? 'คัดลอกแล้ว' : 'คัดลอก URL'}
               </button>
             </div>
             <p className="warning-hint">

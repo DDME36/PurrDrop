@@ -355,11 +355,19 @@ textarea,
 .app {
   max-width: 500px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
   padding-bottom: 120px;
   position: relative;
   z-index: 1;
   width: 100%;
+}
+
+/* Mobile - เพิ่ม padding ให้มากขึ้น */
+@media screen and (max-width: 640px) {
+  .app {
+    padding: 16px 20px;
+    padding-bottom: 120px;
+  }
 }
 
 /* Tablet/iPad override */
@@ -367,12 +375,14 @@ textarea,
   .app {
     max-width: 85vw;
     max-width: min(750px, 85vw);
+    padding: 24px;
   }
 }
 
 @media screen and (min-width: 1024px) {
   .app {
     max-width: min(900px, 80vw);
+    padding: 32px;
   }
 }
 
@@ -383,6 +393,36 @@ textarea,
   align-items: center;
   padding: 8px 0;
   margin-bottom: 12px;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .header {
+    padding: 8px 4px;
+    gap: 8px;
+  }
+  
+  .logo-wrapper {
+    font-size: 24px;
+  }
+  
+  .header-actions {
+    gap: 4px;
+  }
+  
+  .btn-icon-header {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .install-btn {
+    padding: 0 10px !important;
+    height: 32px !important;
+  }
+  
+  .install-text {
+    font-size: 12px;
+  }
 }
 
 .logo {
@@ -429,6 +469,8 @@ textarea,
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   filter: drop-shadow(0 4px 12px rgba(255, 179, 209, 0.2));
   animation: logoFloat 4s ease-in-out infinite;
+  white-space: nowrap;
+  flex-wrap: nowrap;
 }
 
 .logo:hover .logo-wrapper {
@@ -1419,18 +1461,47 @@ textarea,
   filter: drop-shadow(0 10px 20px rgba(255, 107, 157, 0.4));
 }
 
-.peer-name {
+.peer-card .peer-name,
+.peer-select-item .peer-name {
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
-  text-align: center;
+  text-align: center !important;
   margin-top: 10px;
+  width: 100%;
+  display: block !important;
 }
 
-.peer-device {
+.peer-card .peer-device {
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 2px;
+  text-align: center !important;
+  width: 100%;
+  display: block !important;
+}
+
+.peer-card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  text-align: center;
+}
+
+.peer-cloud::before {
+  width: 32px;
+  height: 32px;
+  top: -16px;
+  left: 14px;
+}
+
+.peer-cloud::after {
+  width: 24px;
+  height: 24px;
+  top: -10px;
+  left: 44px;
 }
 
 .heart-float {
@@ -2332,9 +2403,9 @@ textarea,
 /* Mobile specific padding */
 @media (max-width: 768px) {
   .modal {
-    padding: 30px 16px;
-    padding-top: max(30px, env(safe-area-inset-top) + 10px);
-    padding-bottom: max(30px, env(safe-area-inset-bottom) + 10px);
+    padding: 40px 20px;
+    padding-top: max(40px, env(safe-area-inset-top) + 20px);
+    padding-bottom: max(40px, env(safe-area-inset-bottom) + 20px);
   }
 }
 
@@ -2363,10 +2434,12 @@ textarea,
   -webkit-backdrop-filter: blur(20px);
   border: 2px solid white;
   border-radius: var(--radius);
-  padding: 32px;
+  padding: 32px 24px;
   text-align: center;
   max-width: 360px;
-  width: 100%;
+  width: calc(100% - 32px);
+  max-height: 90vh;
+  overflow-y: auto;
   animation: modalScaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-shadow: 0 25px 60px rgba(255, 179, 209, 0.3);
 }
@@ -3421,6 +3494,9 @@ textarea,
 
   .peer-name {
     font-size: 15px;
+    text-align: center !important;
+    width: 100%;
+    display: block;
   }
 
   /* Empty state for tablet - เล็กลงและดันขึ้น */
@@ -3952,6 +4028,7 @@ textarea,
   color: var(--text-secondary) !important;
   border-radius: 16px !important;
   font-weight: 600;
+  justify-content: center;
 }
 
 [data-theme="dark"] .btn-close-action {
@@ -4106,16 +4183,13 @@ textarea,
 .peer-emoji {
   font-size: 18px;
   line-height: 1;
-  display: flex;
-  align-items: center;
 }
 
 .peer-name {
   font-size: 13px;
   font-weight: 500;
   line-height: 1;
-  display: flex;
-  align-items: center;
+  text-align: center;
 }
 
 .no-peers {
@@ -4524,6 +4598,8 @@ textarea,
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+  line-height: 1.6;
+  padding-top: 2px;
 }
 
 .mode-network-name {
@@ -5938,6 +6014,7 @@ button.peer-select-item.selected {
 .peer-name-text {
   display: flex !important;
   align-items: center !important;
+  justify-content: center !important;
   line-height: 28px !important;
   font-size: 15px !important;
 }
@@ -6066,7 +6143,9 @@ button.peer-select-item.selected {
 
 .install-text {
   font-size: 13px;
-  line-height: 1;
+  line-height: 1.6;
+  padding-top: 2px;
+  white-space: nowrap;
 }
 
 /* Status Dot - Re-enabled pulse with refined animation */
@@ -6820,20 +6899,40 @@ button.peer-select-item.selected {
 
 .peer-actions-menu {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
+  margin: auto;
+  width: 120px;
+  height: 120px;
+  max-width: 95%;
+  max-height: 95%;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
-  border-radius: inherit;
+  border-radius: 50%;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 12px;
-  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  gap: 6px;
   z-index: 30;
-  box-shadow: inset 0 0 0 2px var(--accent-pink);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), inset 0 0 0 2px var(--accent-pink);
+}
+
+.peer-menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 25;
+  background: transparent;
+  cursor: default;
+}
+
+.peer-card.menu-open .peer-card-content {
+  opacity: 0.15;
+  filter: blur(2px);
+  pointer-events: none;
 }
 
 [data-theme="dark"] .peer-actions-menu {
@@ -6843,17 +6942,24 @@ button.peer-select-item.selected {
 .peer-action-btn {
   border: none;
   background: white;
-  border-radius: 12px;
-  padding: 10px;
+  border-radius: 10px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  gap: 6px;
+  width: 85px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  justify-content: center;
+}
+
+.peer-action-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 [data-theme="dark"] .peer-action-btn {

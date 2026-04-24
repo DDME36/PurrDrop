@@ -1,7 +1,7 @@
 'use client';
 
 import { Peer } from '@/lib/critters';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 // Icons
 const FolderIcon = () => (
@@ -142,6 +142,27 @@ export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
 
   const handleCardClick = () => setShowMenu(!showMenu);
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!showMenu) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    // Use a small timeout to avoid immediate closing if the click that opened it bubbles up
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 10);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showMenu]);
+
   return (
     <div
       ref={cardRef}
@@ -175,17 +196,20 @@ export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
       </div>
 
       {showMenu && (
-        <div className="peer-actions-menu animate-pop-in" onClick={e => e.stopPropagation()}>
-          <button className="peer-action-btn file" onClick={() => { onSelect(peer); setShowMenu(false); }}>
-            <FileIcon /> <span>ไฟล์</span>
-          </button>
-          <button className="peer-action-btn folder" onClick={() => { (window as any).triggerFolderSelect?.(peer); setShowMenu(false); }}>
-            <FolderIcon /> <span>โฟลเดอร์</span>
-          </button>
-          <button className="peer-action-btn text" onClick={() => { (window as any).triggerTextShare?.('', peer); setShowMenu(false); }}>
-            <MessageIcon /> <span>ข้อความ</span>
-          </button>
-        </div>
+        <>
+          <div className="peer-menu-backdrop" onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} />
+          <div className="peer-actions-menu animate-pop-in" onClick={e => e.stopPropagation()}>
+            <button className="peer-action-btn file" onClick={() => { onSelect(peer); setShowMenu(false); }}>
+              <FileIcon /> <span>ไฟล์</span>
+            </button>
+            <button className="peer-action-btn folder" onClick={() => { (window as any).triggerFolderSelect?.(peer); setShowMenu(false); }}>
+              <FolderIcon /> <span>โฟลเดอร์</span>
+            </button>
+            <button className="peer-action-btn text" onClick={() => { (window as any).triggerTextShare?.('', peer); setShowMenu(false); }}>
+              <MessageIcon /> <span>ข้อความ</span>
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

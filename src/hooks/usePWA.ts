@@ -16,6 +16,7 @@ export function usePWA() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [showIOSModal, setShowIOSModal] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -65,7 +66,8 @@ export function usePWA() {
 
   const promptInstall = useCallback(async () => {
     if (isIOS) {
-      alert("📱 เพื่อติดตั้งแอปบน iOS:\n1. แตะปุ่ม 'แชร์' (Share) ด้านล่าง\n2. เลือก 'เพิ่มไปยังหน้าจอโฮม' (Add to Home Screen)");
+      // Show modal instead of alert
+      setShowIOSModal(true);
       return;
     }
 
@@ -81,5 +83,16 @@ export function usePWA() {
     setDeferredPrompt(null);
   }, [deferredPrompt, isIOS]);
 
-  return { isInstallable, isInstalled, promptInstall, isIOS };
+  const closeIOSModal = useCallback(() => {
+    setShowIOSModal(false);
+  }, []);
+
+  return { 
+    isInstallable, 
+    isInstalled, 
+    promptInstall, 
+    isIOS,
+    showIOSModal,
+    closeIOSModal
+  };
 }

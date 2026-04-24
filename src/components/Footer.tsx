@@ -7,17 +7,9 @@ const MessageCircleIcon = () => (
   </svg>
 );
 
-interface FooterProps {
-  onFeedback: () => void;
-  hasPeers: boolean;
-}
-
-export function Footer({ onFeedback, hasPeers }: FooterProps) {
+export function Footer({ hasPeers }: { hasPeers: boolean }) {
   return (
     <div className={`app-footer ${hasPeers ? 'has-peers' : 'no-peers'}`}>
-      <button className="feedback-btn" onClick={onFeedback}>
-        <MessageCircleIcon /> Feedback
-      </button>
       <div className="footer-credit">by ddme36 (Dome)</div>
     </div>
   );

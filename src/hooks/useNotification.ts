@@ -26,7 +26,7 @@ export function useNotification() {
   const notify = useCallback((title: string, options?: NotificationOptions) => {
     if (!('Notification' in window)) return;
     if (Notification.permission !== 'granted') return;
-    if (document.hasFocus()) return; // Don't notify if tab is focused
+    // if (document.hasFocus()) return; // Don't notify if tab is focused - Removed for better visibility
 
     try {
       const notification = new Notification(title, {
