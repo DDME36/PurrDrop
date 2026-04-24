@@ -23,6 +23,7 @@ import {
   HistoryModal,
   FeedbackModal,
   TextShareModal,
+  ScannerModal,
 } from '@/components/modals';
 import { useSound } from '@/hooks/useSound';
 import { usePeerConnection } from '@/hooks/usePeerConnection';
@@ -32,6 +33,7 @@ import { Peer } from '@/lib/critters';
 import { createZipFile, FileWithContext } from '@/lib/compression';
 import { getHistory, addToHistory, TransferRecord } from '@/lib/transferHistory';
 import { detectNetworkQuality, NetworkQuality } from '@/lib/networkQuality';
+import { usePWA } from '@/hooks/usePWA';
 
 export default function Home() {
   const {
@@ -63,14 +65,17 @@ export default function Home() {
   const { muted, toggle: toggleMute, play, vibrate } = useSound();
   const { isDark, toggleTheme } = useTheme();
   const { requestPermission, notifyFileOffer, notifyTransferComplete, notifyPeerJoined } = useNotification();
+  const { isInstallable, promptInstall } = usePWA();
 
   const [showNameModal, setShowNameModal] = useState(false);
   const [showEmojiModal, setShowEmojiModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showTextShareModal, setShowTextShareModal] = useState(false);
+  const [prefilledText, setPrefilledText] = useState('');
   const [newPeerIds, setNewPeerIds] = useState<Set<string>>(new Set());
   const [baseUrl, setBaseUrl] = useState('');
   const [history, setHistory] = useState<TransferRecord[]>([]);
@@ -78,6 +83,7 @@ export default function Home() {
   const [networkQuality, setNetworkQuality] = useState<NetworkQuality>('good');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const selectedPeerRef = useRef<Peer | null>(null);
   const confettiRef = useRef<ConfettiRef>(null);
   const toastRef = useRef<ToastRef>(null);
@@ -111,12 +117,17 @@ export default function Home() {
     url.search = '';
     setBaseUrl(url.toString());
 
-    // Check for mode params
+    // Check for shared files or mode params
     const params = new URLSearchParams(window.location.search);
     const modeParam = params.get('mode');
     const roomParam = params.get('room');
+    const sharedParam = params.get('shared');
 
-    if (modeParam && !initialModeSet && connected) {
+    if (sharedParam === 'true') {
+      toastRef.current?.show('เลือกเพื่อนเพื่อส่งไฟล์ที่แชร์มาได้เลย!', 'success');
+      // Clean URL params
+      window.history.replaceState({}, '', url.toString());
+    } else if (modeParam && !initialModeSet && connected) {
       if (modeParam === 'wifi') {
         setMode('wifi');
         toastRef.current?.show('เข้าโหมด WiFi แล้ว', 'info');
@@ -178,7 +189,10 @@ export default function Home() {
   // Register service worker for PWA
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(console.error);
+      // Small delay to prevent blocking main thread on load
+      setTimeout(() => {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+      }, 1000);
     }
   }, []);
 
@@ -266,7 +280,7 @@ export default function Home() {
     }
 
     // Multiple files - create ZIP (Smart Folder: use preserved paths for folder structure)
-    toastRef.current?.show('กำลังบีบอัดไฟล์...', 'info');
+    toastRef.current?.show('กำลังมัดรวมไฟล์...', 'info');
 
     try {
       const zipFile = await createZipFile(filesWithContext);
@@ -289,7 +303,7 @@ export default function Home() {
       }
     } catch (err) {
       console.error('ZIP error:', err);
-      toastRef.current?.show('บีบอัดไฟล์ล้มเหลว', 'error');
+      toastRef.current?.show('มัดรวมไฟล์ล้มเหลว', 'error');
     }
   }, [sendFile]);
 
@@ -334,19 +348,36 @@ export default function Home() {
       }
 
       // For input selection, we don't have detailed path info, so use filename as path
-      // Clean up iOS temp filenames (temp_image_UUID.webp -> Image_1.webp)
+      // Clean up iOS temp filenames and generic names (image.jpg, trim.MOV)
       const filesWithContext = validFiles.map((f, index) => {
         let cleanName = f.name;
+        const timestamp = new Date().getTime().toString().slice(-6);
         
-        // Detect iOS temp image pattern: temp_image_UUID.ext
+        // 1. Detect iOS temp pattern: temp_image_UUID.ext
         if (/^temp_image_[A-F0-9-]{36}\.(webp|jpg|jpeg|png)$/i.test(f.name)) {
           const ext = f.name.split('.').pop();
-          cleanName = `Image_${index + 1}.${ext}`;
-          console.log(`🔄 Renamed iOS temp file: ${f.name} → ${cleanName}`);
+          cleanName = `Image_${timestamp}_${index + 1}.${ext}`;
+        } 
+        // 2. Detect generic iOS Photos names (image.jpg, image.png, image.heic)
+        else if (/^image\.(jpg|jpeg|png|heic)$/i.test(f.name)) {
+          const ext = f.name.split('.').pop();
+          cleanName = `Photo_${timestamp}_${index + 1}.${ext}`;
+        }
+        // 3. Detect generic iOS Video names (video.mov, trim.UUID.MOV)
+        else if (/^(video|trim)\..*\.(mov|mp4)$/i.test(f.name) || /^trim\.(mov|mp4)$/i.test(f.name)) {
+          const ext = f.name.split('.').pop();
+          cleanName = `Video_${timestamp}_${index + 1}.${ext}`;
         }
         
+        if (cleanName !== f.name) {
+          console.log(`🔄 Renamed generic/iOS file: ${f.name} → ${cleanName}`);
+        }
+        
+        // Ensure we preserve the type, fallback to our detector if empty
+        const detectedType = f.type || detectImageMimeType(new File([], cleanName));
+        
         return { 
-          file: new File([f], cleanName, { type: f.type || 'application/octet-stream' }), 
+          file: new File([f], cleanName, { type: detectedType }), 
           path: cleanName 
         };
       });
@@ -381,6 +412,54 @@ export default function Home() {
     setHistory([]);
   }, []);
 
+  const handleRemoveHistoryItem = useCallback((id: string) => {
+    setHistory(prev => prev.filter(item => item.id !== id));
+  }, []);
+
+  // Performance Optimization: Pause animations when tab is not visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        document.body.classList.add('animations-paused');
+      } else {
+        document.body.classList.remove('animations-paused');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    (window as any).triggerScanner = () => setShowScannerModal(true);
+    (window as any).triggerTextShare = (text: string) => {
+      setPrefilledText(text);
+      setShowTextShareModal(true);
+    };
+    (window as any).triggerFolderSelect = (peer: Peer) => {
+      vibrate(15);
+      selectedPeerRef.current = peer;
+      folderInputRef.current?.click();
+    };
+    return () => { 
+      delete (window as any).triggerScanner; 
+      delete (window as any).triggerTextShare;
+      delete (window as any).triggerFolderSelect;
+    };
+  }, [vibrate]);
+
+  const handleFolderSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0 && selectedPeerRef.current) {
+      const filesArr = Array.from(e.target.files);
+      const filesWithContext = filesArr.map(f => ({
+        file: f,
+        path: (f as any).webkitRelativePath || f.name
+      }));
+      handleMultiFiles(filesWithContext, selectedPeerRef.current);
+    }
+    if (folderInputRef.current) folderInputRef.current.value = '';
+  }, [handleMultiFiles]);
+
   return (
     <>
       <BrowserWarning />
@@ -389,6 +468,34 @@ export default function Home() {
       <Confetti ref={confettiRef} />
       <Toast ref={toastRef} />
 
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelect}
+        multiple
+        style={{ display: 'none' }}
+      />
+
+      <input
+        type="file"
+        ref={folderInputRef}
+        onChange={handleFolderSelect}
+        /* @ts-ignore */
+        webkitdirectory=""
+        directory=""
+        multiple
+        style={{ display: 'none' }}
+      />
+
+      <ScannerModal
+        show={showScannerModal}
+        onScan={(code) => {
+          setMode('private', code);
+          toastRef.current?.show(`กำลังเข้าร่วมห้อง ${code}...`, 'info');
+        }}
+        onClose={() => setShowScannerModal(false)}
+      />
+
       <div id="toastContainer" />
 
       <div className="app">
@@ -396,6 +503,8 @@ export default function Home() {
           muted={muted}
           isDark={isDark}
           hasPeers={peers.length > 0}
+          isInstallable={isInstallable}
+          onInstall={promptInstall}
           onToggleMute={toggleMute}
           onToggleTheme={toggleTheme}
           onShowHistory={() => setShowHistoryModal(true)}

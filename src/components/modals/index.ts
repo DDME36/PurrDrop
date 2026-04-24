@@ -12,3 +12,5 @@ export { FeedbackModal } from './FeedbackModal';
 export { TextViewModal } from './TextViewModal';
 export { ErrorModal } from './ErrorModal';
 export { IOSDownloadModal } from './IOSDownloadModal';
+export { ScannerModal } from './ScannerModal';
+

@@ -215,19 +215,30 @@ export function ModeSelector({ mode, roomCode, networkName, roomError, onChangeM
               ห้องส่วนตัว
             </span>
             <div className="mode-room-code-big">{roomCode}</div>
-            <button className="mode-copy-btn-big" onClick={handleCopyCode}>
-              {copied ? (
-                <>
-                  <CheckIcon className="mode-svg-icon-sm" />
-                  คัดลอกแล้ว
-                </>
-              ) : (
-                <>
-                  <CopyIcon className="mode-svg-icon-sm" />
-                  คัดลอกรหัส
-                </>
-              )}
-            </button>
+            
+            <div className="mode-private-actions-row">
+              <button className="mode-action-btn-small" onClick={handleCopyCode}>
+                {copied ? (
+                  <><CheckIcon className="mode-svg-icon-xs" /> คัดลอกแล้ว</>
+                ) : (
+                  <><CopyIcon className="mode-svg-icon-xs" /> คัดลอก</>
+                )}
+              </button>
+              
+              <button 
+                className="mode-action-btn-small scan-btn" 
+                onClick={() => (window as any).triggerScanner?.()}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="6" height="6" x="2" y="2" rx="1"/>
+                  <rect width="6" height="6" x="16" y="2" rx="1"/>
+                  <rect width="6" height="6" x="2" y="16" rx="1"/>
+                  <path d="M16 16h2a2 2 0 0 1 2 2v2"/>
+                  <path d="M21 21v.01"/>
+                </svg>
+                สแกน
+              </button>
+            </div>
           </div>
         </div>
       )}

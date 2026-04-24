@@ -1,8 +1,10 @@
-const CACHE_NAME = 'purrdrop-v3';
+const CACHE_NAME = 'purrdrop-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
   '/icon.svg',
+  '/favicon.ico',
+  '/offline.html', // We should have an offline page but '/' works if cached
 ];
 
 // Install - cache static assets
@@ -27,55 +29,86 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch - network first, fallback to cache
+// Fetch - Stale-while-revalidate for static, Network-first for navigation
 self.addEventListener('fetch', (event) => {
+  // Handle POST requests for Share Target
+  if (event.request.method === 'POST' && new URL(event.request.url).pathname === '/') {
+    event.respondWith(
+      (async () => {
+        try {
+          const formData = await event.request.formData();
+          const files = formData.getAll('files');
+          
+          // In a real robust PWA, we'd store files in IndexedDB here
+          // and let the frontend read them on load.
+          // For now, we redirect to home. The user will have to manually pick files.
+          return Response.redirect('/?shared=true', 303);
+        } catch (error) {
+          return Response.redirect('/', 303);
+        }
+      })()
+    );
+    return;
+  }
+
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
   
-  const url = event.request.url;
+  const url = new URL(event.request.url);
 
   // Skip non-http(s) requests (chrome-extension, blob:, data:, etc.)
-  if (!url.startsWith('http')) return;
+  if (!url.protocol.startsWith('http')) return;
   
-  // Skip socket.io and API requests
-  if (url.includes('/socket.io') || url.includes('/api/')) return;
+  // Skip socket.io and API requests (always network)
+  if (url.pathname.includes('/socket.io/') || url.pathname.startsWith('/api/')) return;
 
   // Skip StreamSaver service worker and download URLs
-  // StreamSaver uses jimmywarting.github.io for its mitm page
-  if (url.includes('jimmywarting.github.io')) return;
-  if (url.includes('streamsaver')) return;
+  if (url.hostname.includes('jimmywarting.github.io')) return;
+  if (url.pathname.includes('streamsaver')) return;
 
-  // Skip blob download URLs (object URLs for file downloads)
-  if (url.startsWith('blob:')) return;
+  // Is it a navigation request? (e.g., HTML page)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          // Cache the latest version
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => {
+          // Offline fallback
+          return caches.match('/') || caches.match('/offline.html');
+        })
+    );
+    return;
+  }
 
-  // Don't cache very large responses (video, large files)
-  // Only cache text/html, scripts, stylesheets, images, fonts
+  // For static assets (images, CSS, JS) - Stale-while-revalidate
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Only cache small, safe responses
-        const contentType = response.headers.get('content-type') || '';
-        const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    caches.match(event.request).then((cachedResponse) => {
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        const contentType = networkResponse.headers.get('content-type') || '';
+        const contentLength = parseInt(networkResponse.headers.get('content-length') || '0', 10);
         
         // Don't cache responses > 5MB or video/audio content
-        const shouldCache = response.status === 200 
+        const shouldCache = networkResponse.status === 200 
           && contentLength < 5 * 1024 * 1024
           && !contentType.includes('video')
           && !contentType.includes('audio')
           && !contentType.includes('octet-stream');
 
         if (shouldCache) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clone);
-          });
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
-        return response;
-      })
-      .catch(() => {
-        // Fallback to cache
-        return caches.match(event.request);
-      })
+        return networkResponse;
+      }).catch(() => {
+        // Ignore fetch errors for static assets if we have cache
+      });
+
+      return cachedResponse || fetchPromise;
+    })
   );
 });
 

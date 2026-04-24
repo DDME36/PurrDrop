@@ -8,38 +8,6 @@ export interface FileWithContext {
 // Max 100MB for ZIP to prevent RAM issues
 const MAX_ZIP_SIZE = 100 * 1024 * 1024;
 
-// File types that are already compressed (no benefit from ZIP compression)
-const SKIP_COMPRESS_TYPES = new Set([
-  // Images
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
-  // Video
-  'video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska',
-  // Audio
-  'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm', 'audio/aac',
-  // Archives
-  'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
-  'application/gzip', 'application/x-bzip2',
-  // Documents
-  'application/pdf',
-]);
-
-const SKIP_COMPRESS_EXT = new Set([
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.heic',
-  '.mp4', '.mkv', '.avi', '.mov', '.webm',
-  '.mp3', '.aac', '.ogg', '.m4a', '.flac',
-  '.zip', '.rar', '.7z', '.gz', '.bz2', '.xz',
-  '.pdf', '.docx', '.xlsx', '.pptx',
-]);
-
-function shouldCompressFile(file: File): boolean {
-  if (SKIP_COMPRESS_TYPES.has(file.type)) return false;
-  const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-  if (SKIP_COMPRESS_EXT.has(ext)) return false;
-  // Don't compress files > 50MB (prevent CPU hang)
-  if (file.size > 50 * 1024 * 1024) return false;
-  return true;
-}
-
 // CRC32 lookup table
 const crc32Table: number[] = (() => {
   const table: number[] = [];
@@ -63,6 +31,7 @@ function calcCrc32(data: Uint8Array): number {
 
 /**
  * Create a ZIP file from multiple files with folder structure
+ * Uses 'store' method (no compression) to save CPU and RAM.
  * Returns null if total size exceeds MAX_ZIP_SIZE
  */
 export async function createZipFile(filesWithContext: FileWithContext[]): Promise<File | null> {
@@ -77,7 +46,7 @@ export async function createZipFile(filesWithContext: FileWithContext[]): Promis
   console.log(`📦 Creating ZIP: ${filesWithContext.length} files, ${(totalSize / 1024 / 1024).toFixed(1)}MB`);
 
   let zipSize = 22; // End of central directory record
-  const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number; compressed: boolean }[] = [];
+  const fileInfos: { name: Uint8Array; data: Uint8Array; crc: number }[] = [];
   const encoder = new TextEncoder();
 
   // Process each file
@@ -85,11 +54,10 @@ export async function createZipFile(filesWithContext: FileWithContext[]): Promis
     const data = new Uint8Array(await file.arrayBuffer());
     const name = encoder.encode(path);
     const crc = calcCrc32(data);
-    const compress = shouldCompressFile(file);
 
-    console.log(`📦 ${path}: ${compress ? 'compress' : 'store'} (${file.type || 'unknown'})`);
+    console.log(`📦 Bundling: ${path} (${file.type || 'unknown'})`);
 
-    fileInfos.push({ name, data, crc, compressed: compress });
+    fileInfos.push({ name, data, crc });
     zipSize += 30 + name.length + data.length; // Local file header + data
     zipSize += 46 + name.length; // Central directory entry
   }

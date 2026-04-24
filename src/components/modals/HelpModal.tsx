@@ -100,127 +100,147 @@ export function HelpModal({ show, onClose }: HelpModalProps) {
   return (
     <div className="modal show" onClick={onClose}>
       <div className="modal-content modal-help" onClick={e => e.stopPropagation()}>
+        <div className="help-decoration-top"></div>
+        
         <div className="modal-header">
-          <h3 className="modal-title">วิธีใช้งาน</h3>
+          <div className="modal-title-group">
+            <h3 className="modal-title">PurrDrop Guide</h3>
+            <p className="modal-subtitle">แชร์ไฟล์ง่ายๆ แค่ปลายนิ้ว</p>
+          </div>
           <button className="modal-close" onClick={onClose}><XIcon /></button>
         </div>
         
-        <div className="help-tabs">
-          <button 
-            className={`help-tab ${activeTab === 'basic' ? 'active' : ''}`}
-            onClick={() => setActiveTab('basic')}
-          >
-            ส่งไฟล์
-          </button>
-          <button 
-            className={`help-tab ${activeTab === 'text' ? 'active' : ''}`}
-            onClick={() => setActiveTab('text')}
-          >
-            ส่งข้อความ
-          </button>
-          <button 
-            className={`help-tab ${activeTab === 'history' ? 'active' : ''}`}
-            onClick={() => setActiveTab('history')}
-          >
-            ประวัติ
-          </button>
-          <button 
-            className={`help-tab ${activeTab === 'troubleshoot' ? 'active' : ''}`}
-            onClick={() => setActiveTab('troubleshoot')}
-          >
-            แก้ปัญหา
-          </button>
+        <div className="help-tabs-container">
+          <div className="help-tabs">
+            <button 
+              className={`help-tab ${activeTab === 'basic' ? 'active' : ''}`}
+              onClick={() => setActiveTab('basic')}
+            >
+              <div className="tab-icon">📦</div>
+              <span>ส่งไฟล์</span>
+            </button>
+            <button 
+              className={`help-tab ${activeTab === 'text' ? 'active' : ''}`}
+              onClick={() => setActiveTab('text')}
+            >
+              <div className="tab-icon">💬</div>
+              <span>ข้อความ</span>
+            </button>
+            <button 
+              className={`help-tab ${activeTab === 'history' ? 'active' : ''}`}
+              onClick={() => setActiveTab('history')}
+            >
+              <div className="tab-icon">🕒</div>
+              <span>ประวัติ</span>
+            </button>
+            <button 
+              className={`help-tab ${activeTab === 'troubleshoot' ? 'active' : ''}`}
+              onClick={() => setActiveTab('troubleshoot')}
+            >
+              <div className="tab-icon">🛠️</div>
+              <span>แก้ปัญหา</span>
+            </button>
+          </div>
         </div>
 
-        <div className="help-content">
+        <div className="help-content-scroll">
           {activeTab === 'basic' && (
-            <div className="help-steps">
-              <div className="help-subtitle">ง่ายๆ 4 ขั้นตอน</div>
-              <div className="help-step">
-                <div className="step-badge" style={{ background: STEP_COLORS[0] }}>1</div>
-                <div className="step-icon"><SmartphoneIcon /></div>
-                <div className="step-text">เปิด PurrDrop ในอุปกรณ์อื่น</div>
+            <div className="help-visual-guide">
+              <div className="visual-step">
+                <div className="visual-icon" style={{ background: 'var(--accent-pink)' }}>
+                  <SmartphoneIcon />
+                </div>
+                <div className="visual-text">
+                  <strong>1. เตรียมอุปกรณ์</strong>
+                  <span>เปิด PurrDrop บนเครื่องอื่นเพื่อเชื่อมต่อ</span>
+                </div>
               </div>
-              <div className="help-step">
-                <div className="step-badge" style={{ background: STEP_COLORS[1] }}>2</div>
-                <div className="step-icon"><RefreshCwIcon /></div>
-                <div className="step-text">เลือกโหมดเดียวกัน<br/><small>สาธารณะ / WiFi / ส่วนตัว</small></div>
+              <div className="visual-connector"></div>
+              <div className="visual-step">
+                <div className="visual-icon" style={{ background: 'var(--accent-mint)' }}>
+                  <PointerIcon />
+                </div>
+                <div className="visual-text">
+                  <strong>2. เลือกและส่ง</strong>
+                  <span>กดที่ชื่อเพื่อน เลือกไฟล์ หรือลากวางได้เลย</span>
+                </div>
               </div>
-              <div className="help-step">
-                <div className="step-badge" style={{ background: STEP_COLORS[2] }}>3</div>
-                <div className="step-icon"><PointerIcon /></div>
-                <div className="step-text">คลิกที่เพื่อน → เลือกไฟล์<br/><small>หรือลากไฟล์มาวางก็ได้</small></div>
+              <div className="visual-connector"></div>
+              <div className="visual-step">
+                <div className="visual-icon" style={{ background: 'var(--accent-peach)' }}>
+                  <GiftIcon />
+                </div>
+                <div className="visual-text">
+                  <strong>3. รับไฟล์สำเร็จ</strong>
+                  <span>เพื่อนกด "รับ" ไฟล์จะส่งผ่าน P2P โดยตรง</span>
+                </div>
               </div>
-              <div className="help-step">
-                <div className="step-badge" style={{ background: STEP_COLORS[3] }}>4</div>
-                <div className="step-icon"><GiftIcon /></div>
-                <div className="step-text">เพื่อนกด &quot;รับเลย!&quot; → ส่งผ่าน P2P</div>
+              
+              <div className="help-info-card">
+                <div className="info-icon">💡</div>
+                <p>ใช้ <strong>"โหมด WiFi"</strong> เพื่อความเร็วสูงสุดในการส่งไฟล์ระดับ GB</p>
               </div>
             </div>
           )}
 
           {activeTab === 'text' && (
-            <div className="help-steps">
-              <div className="help-step">
-                <div className="step-badge" style={{ background: STEP_COLORS[3] }}>1</div>
-                <div className="step-icon"><FileTextIcon /></div>
-                <div className="step-text">
-                  กดปุ่มข้อความ (มุมล่างขวา)
+            <div className="help-visual-guide">
+              <div className="visual-step">
+                <div className="visual-icon" style={{ background: 'var(--accent-lavender)' }}>
+                  <FileTextIcon />
+                </div>
+                <div className="visual-text">
+                  <strong>ส่งข้อความและลิงก์</strong>
+                  <span>กดปุ่มเมฆข้อความมุมขวา เพื่อพิมพ์ส่งหาเพื่อน</span>
                 </div>
               </div>
-              <div className="help-step">
-                <div className="step-badge" style={{ background: STEP_COLORS[1] }}>2</div>
-                <div className="step-icon"><PointerIcon /></div>
-                <div className="step-text">
-                  พิมพ์ข้อความ → เลือกเพื่อน → ส่ง
-                  <br/><small>รองรับ URL, ข้อความยาว, และหลายบรรทัด</small>
-                </div>
+              <div className="help-info-card">
+                <div className="info-icon">✨</div>
+                <p>ลิงก์ที่ส่งมา สามารถคลิกเพื่อเปิดได้ทันทีจากเมนูประวัติ</p>
               </div>
             </div>
           )}
 
           {activeTab === 'history' && (
-            <div className="help-steps">
-              <div className="help-step">
-                <div className="step-badge" style={{ background: STEP_COLORS[1] }}>
+            <div className="help-visual-guide">
+              <div className="visual-step">
+                <div className="visual-icon" style={{ background: 'var(--accent-pink)' }}>
                   <HistoryIcon />
                 </div>
-                <div className="step-text">
-                  กดไอคอนนาฬิกา (มุมขวาบน) → ดูไฟล์และข้อความที่ส่ง/รับ
-                  <br/><br/>
-                  <small>คลิกที่ข้อความเพื่ออ่านเต็ม หรือกดปุ่มคัดลอก</small>
+                <div className="visual-text">
+                  <strong>ตรวจสอบประวัติ</strong>
+                  <span>กดปุ่มนาฬิกามุมขวาบน เพื่อดูสิ่งที่เคยแชร์ไป</span>
                 </div>
               </div>
+              <p className="help-note">* ข้อมูลประวัติจะถูกเก็บไว้ในเครื่องของคุณเท่านั้น</p>
             </div>
           )}
 
           {activeTab === 'troubleshoot' && (
-            <div className="help-faq">
+            <div className="help-faq-list">
               <FAQItem 
-                question="ไม่เห็นเพื่อน"
-                answer="ลอง refresh หน้าเว็บทั้งสองเครื่อง และตรวจสอบว่าอยู่โหมดเดียวกัน"
+                question="หาเพื่อนไม่เจอ?"
+                answer="เช็คว่าเปิดโหมดเดียวกัน (เช่น สาธารณะทั้งคู่) และลอง Refresh หน้าเว็บ"
               />
               <FAQItem 
-                question="ส่งไฟล์ไม่ได้"
-                answer="ตรวจสอบว่าทั้งสองเครื่องอยู่โหมดเดียวกัน เช่น สาธารณะทั้งคู่ หรือ WiFi ทั้งคู่"
+                question="ความเร็วช้าเกินไป?"
+                answer="หากอยู่ไกลกันระบบจะใช้ Relay Server แนะนำให้เข้า WiFi เดียวกันจะเร็วขึ้นมาก"
               />
               <FAQItem 
-                question="อยู่คนละ Network"
-                answer="ใช้โหมดส่วนตัว (Private) → สร้างห้อง → แชร์รหัสห้องให้เพื่อน"
+                question="เปิดใน LINE/FB แล้วใช้ไม่ได้?"
+                answer="แอปโซเชียลมักบล็อกการส่งไฟล์ ให้กดเปิดใน Safari หรือ Chrome แทน"
               />
               <FAQItem 
-                question="ใช้ VPN อยู่"
-                answer="ปิด VPN แล้วลองใหม่ หรือใช้โหมดส่วนตัว (Private) แทน"
-              />
-              <FAQItem 
-                question="ไฟล์ใหญ่ส่งช้า"
-                answer="ไฟล์ส่งแบบ P2P โดยตรง ความเร็วขึ้นกับ internet ทั้งสองฝั่ง ลอง WiFi เดียวกันจะเร็วที่สุด"
+                question="ส่งไฟล์ผ่าน 4G/5G ได้ไหม?"
+                answer="ได้ครับ ให้ใช้ 'โหมดส่วนตัว' แล้วแชร์รหัสห้องให้เพื่อน"
               />
             </div>
           )}
         </div>
 
-        <button className="btn btn-close-modal" onClick={onClose}>เข้าใจแล้ว</button>
+        <div className="help-footer">
+          <button className="btn btn-primary btn-full" onClick={onClose}>เริ่มใช้งานเลย!</button>
+        </div>
       </div>
     </div>
   );

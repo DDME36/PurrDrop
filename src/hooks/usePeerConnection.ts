@@ -9,6 +9,7 @@ import { createStreamWriter, shouldUseStreaming, StreamWriter } from '@/lib/stre
 import { detectImageMimeType, validateFile, downloadBlob, requestWakeLock, releaseWakeLock } from '@/lib/webrtc';
 import { detectDevice, shouldUseRelay } from '@/lib/deviceDetection';
 import { handleError, logError } from '@/lib/errorHandler';
+import { generateKeyPair, exportPublicKey, importPublicKey, deriveSharedSecret, encryptChunk, decryptChunk } from '@/lib/encryption';
 
 const MAX_RETRIES = 2; // เพิ่มจาก 1 → 2 เพื่อให้ P2P มีโอกาสมากขึ้น
 const RETRY_DELAY = 500; // เพิ่มจาก 300 → 500ms
@@ -120,64 +121,6 @@ export function usePeerConnection() {
   // Keep refs in sync
   useEffect(() => { myPeerRef.current = myPeer; }, [myPeer]);
   useEffect(() => { peersRef.current = peers; }, [peers]);
-
-  // Download blob - with iOS Safari support + Share API
-  const downloadBlob = useCallback(async (blob: Blob, filename: string) => {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-    if (isIOS) {
-      // Try Share API first (best UX for iOS)
-      if (navigator.share && navigator.canShare) {
-        try {
-          const file = new File([blob], filename, { type: blob.type });
-          
-          if (await navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: 'PurrDrop',
-              text: `ไฟล์: ${filename}`,
-            });
-            console.log('✅ Shared via Share API');
-            return;
-          }
-        } catch (err) {
-          console.log('Share API failed or cancelled:', err);
-        }
-      }
-      
-      // Fallback: Open in new tab
-      const url = URL.createObjectURL(blob);
-      const newWindow = window.open(url, '_blank');
-      
-      if (!newWindow) {
-        // Popup blocked - show instructions
-        console.warn('⚠️ Popup blocked - user needs to allow popups');
-        // TODO: Show IOSDownloadModal here
-        
-        // Try direct link as last resort
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-      
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } else {
-      // Other browsers: direct download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    }
-  }, []);
 
   // Setup data channel handlers
   const setupDataChannel = useCallback((channel: RTCDataChannel, peerId: string) => {
@@ -1229,9 +1172,12 @@ export function usePeerConnection() {
     const critter = assignCritter(navigator.userAgent);
     const device = getDeviceName(navigator.userAgent);
 
-    // ใช้ emoji ที่ user เลือกไว้ (ถ้ามี)
+    // Use emoji from localStorage if available, otherwise use default for OS
     if (customEmoji) {
       critter.emoji = customEmoji;
+    } else {
+      // First time: Save the default OS emoji
+      localStorage.setItem('critters_custom_emoji', critter.emoji);
     }
 
     const peer: Peer = {
@@ -1341,8 +1287,15 @@ export function usePeerConnection() {
       roomPasswordRef.current = pwd;
 
       if (netName) setNetworkName(netName);
-      // Don't clear roomError here — it races with room-error event
-      // roomError is cleared by its own timeout in the room-error handler
+    });
+
+    socket.on('force-disconnect', ({ reason }: { reason: string }) => {
+      console.log(`⚠️ Force disconnect: ${reason}`);
+      setConnectionStatus('disconnected');
+      socket.disconnect();
+      // Show a toast or alert to user
+      alert(`การเชื่อมต่อถูกตัด: ${reason}`);
+      window.location.reload(); // Reload to get a clean state or just stop
     });
 
     socket.on('room-error', ({ error, message }: { error: string; message: string }) => {

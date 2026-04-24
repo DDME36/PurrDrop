@@ -23,7 +23,6 @@ export function useSound() {
   const [muted, setMuted] = useState(false);
   const mutedRef = useRef(muted);
 
-  // Keep ref in sync for use in callbacks
   useEffect(() => {
     mutedRef.current = muted;
   }, [muted]);
@@ -42,113 +41,88 @@ export function useSound() {
   }, []);
 
   const play = useCallback((type: 'connect' | 'whoosh' | 'success' | 'notification' | 'tick' | 'progress25' | 'progress50' | 'progress75' | 'sending' | 'complete') => {
-    // Use ref to avoid stale closure
     if (mutedRef.current) return;
 
     try {
       const ctx = getAudioContext();
       if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
 
-      // Resume if suspended (required after user interaction in modern browsers)
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+      const playTone = (freq: number, duration: number, volume: number = 0.1, type: OscillatorType = 'sine', decay: number = 0.1) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        
+        // ADSR Envelope for "Premium" feel (No clicks, smooth fade)
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      };
 
       if (type === 'connect') {
-        osc.frequency.value = 800;
-        gain.gain.value = 0.1;
+        // Soft bubble pop
+        playTone(600, 0.1, 0.08, 'sine');
+      } else if (type === 'whoosh' || type === 'sending') {
+        // Elegant slide up
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.setValueAtTime(300, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
         osc.start();
-        osc.stop(ctx.currentTime + 0.1);
-      } else if (type === 'whoosh') {
-        osc.frequency.value = 400;
-        gain.gain.value = 0.1;
-        osc.start();
-        osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.2);
         osc.stop(ctx.currentTime + 0.2);
       } else if (type === 'success' || type === 'complete') {
-        // Victory fanfare - ascending notes
-        osc.frequency.value = 600;
-        gain.gain.value = 0.1;
-        osc.start();
-        osc.frequency.linearRampToValueAtTime(900, ctx.currentTime + 0.15);
-        osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.3);
-        osc.stop(ctx.currentTime + 0.3);
+        // Harplike ascending notes (Premium feel)
+        [659.25, 830.61, 987.77].forEach((f, i) => {
+          setTimeout(() => playTone(f, 0.4, 0.06, 'sine'), i * 80);
+        });
       } else if (type === 'notification') {
-        // Two-tone notification sound
-        osc.frequency.value = 880;
-        gain.gain.value = 0.12;
-        osc.start();
-        osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
-        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
-        osc.stop(ctx.currentTime + 0.3);
+        // Modern chime
+        playTone(880, 0.3, 0.08, 'sine');
+        setTimeout(() => playTone(740, 0.3, 0.08, 'sine'), 100);
       } else if (type === 'tick') {
-        // Soft tick for progress
-        osc.frequency.value = 1200;
-        gain.gain.value = 0.05;
-        osc.start();
-        osc.stop(ctx.currentTime + 0.03);
-      } else if (type === 'progress25') {
-        // First milestone - low note
-        osc.frequency.value = 440;
-        gain.gain.value = 0.08;
-        osc.start();
-        osc.stop(ctx.currentTime + 0.08);
-      } else if (type === 'progress50') {
-        // Halfway - medium note
-        osc.frequency.value = 550;
-        gain.gain.value = 0.08;
-        osc.start();
-        osc.frequency.linearRampToValueAtTime(600, ctx.currentTime + 0.1);
-        osc.stop(ctx.currentTime + 0.1);
-      } else if (type === 'progress75') {
-        // Almost there - higher note
-        osc.frequency.value = 660;
-        gain.gain.value = 0.08;
-        osc.start();
-        osc.frequency.linearRampToValueAtTime(750, ctx.currentTime + 0.12);
-        osc.stop(ctx.currentTime + 0.12);
-      } else if (type === 'sending') {
-        // Swoosh up - starting transfer
-        osc.type = 'sine';
-        osc.frequency.value = 300;
-        gain.gain.value = 0.1;
-        osc.start();
-        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.25);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        osc.stop(ctx.currentTime + 0.3);
+        // Very subtle wood-like tick
+        playTone(1200, 0.05, 0.03, 'sine');
+      } else if (type.startsWith('progress')) {
+        const freqs = { progress25: 440, progress50: 554, progress75: 659 };
+        playTone(freqs[type as keyof typeof freqs] || 440, 0.2, 0.05, 'sine');
       }
-    } catch {
-      // Audio not supported
+    } catch (e) {
+      console.error('Audio error:', e);
     }
   }, []);
 
-  // Detailed haptic patterns for different events
   const vibratePattern = useCallback((type: 'tap' | 'select' | 'success' | 'error' | 'progress' | 'milestone' | 'complete' | 'sending') => {
     if (!('vibrate' in navigator)) return;
 
     const patterns: Record<string, number | number[]> = {
-      tap: 10,                           // Quick tap
-      select: [15, 30, 15],              // Double tap
-      success: [50, 50, 100],            // Celebration pattern
-      error: [100, 50, 100, 50, 100],    // Warning pattern
-      progress: 5,                        // Subtle tick
-      milestone: [30, 20, 30],            // Milestone reached
-      complete: [50, 30, 50, 30, 100],   // Victory pattern
-      sending: [20, 40, 20, 40, 20],     // Sending/waiting pattern
+      tap: 10,
+      select: [10, 20, 10],
+      success: [40, 40, 80],
+      error: [80, 40, 80, 40, 80],
+      progress: 5,
+      milestone: [20, 20, 20],
+      complete: [40, 20, 40, 20, 60],
+      sending: [10, 30, 10, 30, 10],
     };
 
     navigator.vibrate(patterns[type] || 10);
   }, []);
 
   const vibrate = useCallback((pattern: number | number[] = 10) => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(pattern);
-    }
+    if ('vibrate' in navigator) navigator.vibrate(pattern);
   }, []);
 
   return { muted, toggle, play, vibrate, vibratePattern };

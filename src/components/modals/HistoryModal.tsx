@@ -1,24 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { TransferRecord, formatFileSize, formatTime, clearHistory } from '@/lib/transferHistory';
+import { TransferRecord, formatFileSize, formatTime, clearHistory, removeFromHistory } from '@/lib/transferHistory';
 import { ConfirmModal } from './ConfirmModal';
 import { TextViewModal } from './TextViewModal';
 
-// Lucide Icons
+// Icons
 const UploadIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 17V3"/>
-    <path d="m6 8 6-6 6 6"/>
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <path d="M12 17V3"/><path d="m6 8 6-6 6 6"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
   </svg>
 );
 
 const DownloadIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 15V3"/>
-    <path d="m7 10 5 5 5-5"/>
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
   </svg>
 );
 
@@ -31,19 +27,13 @@ const MessageSquareIcon = () => (
 const ClipboardListIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
-    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-    <path d="M12 11h4"/>
-    <path d="M12 16h4"/>
-    <path d="M8 11h.01"/>
-    <path d="M8 16h.01"/>
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>
   </svg>
 );
 
 const TrashIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18"/>
-    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
   </svg>
 );
 
@@ -54,23 +44,15 @@ const InboxIcon = () => (
   </svg>
 );
 
-const CheckSmallIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 6 9 17l-5-5"/>
-  </svg>
-);
-
 const XSmallIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 6 6 18"/>
-    <path d="m6 6 12 12"/>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
   </svg>
 );
 
-const XCloseIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 6 6 18"/>
-    <path d="m6 6 12 12"/>
+const SendIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
   </svg>
 );
 
@@ -79,50 +61,39 @@ interface HistoryModalProps {
   history: TransferRecord[];
   onClose: () => void;
   onClear: () => void;
+  onRemoveItem: (id: string) => void;
 }
 
-export function HistoryModal({ show, history, onClose, onClear }: HistoryModalProps) {
+export function HistoryModal({ show, history, onClose, onClear, onRemoveItem }: HistoryModalProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [viewingText, setViewingText] = useState<TransferRecord | null>(null);
 
-  // Fallback copy method for browsers without clipboard API
-  const fallbackCopy = (text: string, btn: HTMLButtonElement, originalHTML: string) => {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    
-    try {
-      document.execCommand('copy');
-      btn.innerHTML = '✓';
-      setTimeout(() => btn.innerHTML = originalHTML, 1000);
-    } catch (err) {
-      console.error('Copy failed:', err);
-      btn.innerHTML = '✗';
-      setTimeout(() => btn.innerHTML = originalHTML, 1000);
-    } finally {
-      document.body.removeChild(textarea);
-    }
-  };
-
   if (!show) return null;
 
-  const handleClearClick = () => {
-    setShowConfirm(true);
-  };
-
+  const handleClearClick = () => setShowConfirm(true);
+  
   const handleConfirmClear = () => {
     clearHistory();
     onClear();
     setShowConfirm(false);
   };
 
-  const handleTextClick = (record: TransferRecord) => {
-    if (record.type === 'text' && record.textContent) {
-      setViewingText(record);
+  const handleRemoveSingle = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    removeFromHistory(id);
+    onRemoveItem(id);
+  };
+
+  const handleReshareText = (e: React.MouseEvent, record: TransferRecord) => {
+    e.stopPropagation();
+    if (record.textContent) {
+      (window as any).triggerTextShare?.(record.textContent);
+      onClose();
     }
+  };
+
+  const handleTextClick = (record: TransferRecord) => {
+    if (record.textContent) setViewingText(record);
   };
 
   return (
@@ -130,127 +101,73 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
       <div className="modal show" onClick={onClose}>
         <div className="modal-content modal-history" onClick={e => e.stopPropagation()}>
           <div className="modal-header">
-            <h3 className="modal-title"><ClipboardListIcon /> ประวัติการส่งไฟล์</h3>
-            <button className="modal-close" onClick={onClose}><XCloseIcon /></button>
+            <div className="modal-title-group">
+              <h3 className="modal-title"><ClipboardListIcon /> ประวัติการใช้งาน</h3>
+              <p className="modal-subtitle">รายการที่คุณส่งและรับ</p>
+            </div>
+            <div className="header-actions-row">
+              {history.length > 0 && (
+                <button className="btn-icon-history trash" onClick={handleClearClick} title="ล้างทั้งหมด">
+                  <TrashIcon />
+                </button>
+              )}
+              <button className="modal-close" onClick={onClose}><XSmallIcon /></button>
+            </div>
           </div>
           
           <div className="history-list">
             {history.length === 0 ? (
               <div className="history-empty">
                 <span className="history-empty-icon"><InboxIcon /></span>
-                <p>ยังไม่มีประวัติ</p>
+                <p>ยังไม่มีประวัติการส่งไฟล์</p>
               </div>
             ) : (
               history.map(record => {
-                if (record.type === 'text' || record.textContent || record.fileName === 'ข้อความ/ลิงก์') {
-                  return (
-                    <div key={record.id} className={`history-item text-message-card ${record.direction}`}>
-                      <div className="history-icon">
-                        <MessageSquareIcon />
+                const isText = record.type === 'text' || record.textContent || record.fileName === 'ข้อความ/ลิงก์';
+                
+                return (
+                  <div key={record.id} className={`history-card ${record.direction} ${isText ? 'text-card' : ''}`}>
+                    <div className="history-card-main">
+                      <div className="history-icon-box">
+                        {isText ? <MessageSquareIcon /> : (record.direction === 'sent' ? <UploadIcon /> : <DownloadIcon />)}
                       </div>
-                      <div className="history-info" onClick={() => handleTextClick(record)} style={{ cursor: 'pointer' }}>
-                        <div className="text-message-header">
-                          <span className="text-message-sender">
-                            {record.direction === 'sent' ? `ส่งให้ ${record.peerName}` : `จาก ${record.peerName}`}
+                      
+                      <div className="history-details" onClick={() => isText && handleTextClick(record)}>
+                        <div className="history-row-top">
+                          <span className="history-peer">
+                            {record.direction === 'sent' ? `ส่งให้ ${record.peerName}` : `รับจาก ${record.peerName}`}
                           </span>
-                          <div className="text-message-actions">
-                            <span className="history-time">{formatTime(record.timestamp)}</span>
-                            {record.textContent && (
-                              <button 
-                                className="history-copy-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const btn = e.currentTarget;
-                                  const original = btn.innerHTML;
-                                  
-                                  // Try modern clipboard API first
-                                  if (navigator.clipboard && navigator.clipboard.writeText) {
-                                    navigator.clipboard.writeText(record.textContent!)
-                                      .then(() => {
-                                        btn.innerHTML = '✓';
-                                        setTimeout(() => btn.innerHTML = original, 1000);
-                                      })
-                                      .catch(() => {
-                                        // Fallback to textarea method
-                                        fallbackCopy(record.textContent!, btn, original);
-                                      });
-                                  } else {
-                                    // Fallback for older browsers
-                                    fallbackCopy(record.textContent!, btn, original);
-                                  }
-                                }}
-                                title="คัดลอก"
-                              >
-                                <ClipboardListIcon />
-                              </button>
-                            )}
-                            <div className={`history-status ${record.success ? 'success' : 'failed'}`}>
-                              {record.success ? <CheckSmallIcon /> : <XSmallIcon />}
-                            </div>
-                          </div>
+                          <span className="history-time-tag">{formatTime(record.timestamp)}</span>
                         </div>
-                        {record.textContent && (
-                          <div className="history-text-preview-container">
-                            <div className="history-text-preview" title="คลิกเพื่ออ่านเต็ม">
-                              {(() => {
-                                const lines = record.textContent.split('\n');
-                                const maxLines = 2;
-                                const maxCharsPerLine = 50;
-                                
-                                // Take first 2 lines
-                                let preview = lines.slice(0, maxLines).join('\n');
-                                
-                                // If there are more lines, add ellipsis
-                                if (lines.length > maxLines) {
-                                  preview += '...';
-                                } else if (preview.length > maxCharsPerLine * maxLines) {
-                                  // If total chars exceed limit, truncate
-                                  preview = preview.substring(0, maxCharsPerLine * maxLines) + '...';
-                                }
-                                
-                                return preview;
-                              })()}
-                            </div>
+                        
+                        <div className="history-row-mid">
+                          <span className="history-name-text">{record.fileName}</span>
+                          {!isText && <span className="history-size-tag">{formatFileSize(record.fileSize)}</span>}
+                        </div>
+
+                        {isText && record.textContent && (
+                          <div className="history-preview-box">
+                            {record.textContent.substring(0, 80)}{record.textContent.length > 80 ? '...' : ''}
                           </div>
                         )}
                       </div>
-                    </div>
-                  );
-                }
 
-                // Default layout for file transfers
-                return (
-                  <div key={record.id} className={`history-item ${record.direction}`}>
-                    <div className="history-icon">
-                      {record.direction === 'sent' ? <UploadIcon /> : <DownloadIcon />}
-                    </div>
-                    <div className="history-info">
-                      <div className="history-filename">
-                        <span className="history-filename-text">{record.fileName}</span>
+                      <div className="history-actions-box">
+                        {isText && (
+                          <button className="action-circle reshare" onClick={(e) => handleReshareText(e, record)} title="ส่งต่อ">
+                            <SendIcon />
+                          </button>
+                        )}
+                        <button className="action-circle remove" onClick={(e) => handleRemoveSingle(e, record.id)} title="ลบ">
+                          <XSmallIcon />
+                        </button>
                       </div>
-                      <div className="history-meta">
-                        <span>{formatFileSize(record.fileSize)}</span>
-                        <span>•</span>
-                        <span>{record.direction === 'sent' ? `ส่งให้ ${record.peerName}` : `จาก ${record.peerName}`}</span>
-                      </div>
-                    </div>
-                    <div className="history-time">{formatTime(record.timestamp)}</div>
-                    <div className={`history-status ${record.success ? 'success' : 'failed'}`}>
-                      {record.success ? <CheckSmallIcon /> : <XSmallIcon />}
                     </div>
                   </div>
                 );
               })
             )}
           </div>
-
-          {history.length > 0 && (
-            <div className="history-actions">
-              <button className="btn btn-pastel" onClick={handleClearClick}>
-                <TrashIcon /> ล้างประวัติ
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -258,7 +175,7 @@ export function HistoryModal({ show, history, onClose, onClear }: HistoryModalPr
         show={showConfirm}
         title="ล้างประวัติ"
         message="ต้องการล้างประวัติทั้งหมดหรือไม่?"
-        confirmText="ล้าง"
+        confirmText="ล้างทั้งหมด"
         cancelText="ยกเลิก"
         onConfirm={handleConfirmClear}
         onCancel={() => setShowConfirm(false)}

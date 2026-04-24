@@ -51,6 +51,12 @@ export function clearHistory() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+export function removeFromHistory(id: string) {
+  const history = getHistory();
+  const updated = history.filter(item => item.id !== id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;

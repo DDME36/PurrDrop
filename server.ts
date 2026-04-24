@@ -87,21 +87,43 @@ app.prepare().then(() => {
     socket.on('join', (peerData: Peer) => {
       if (dev) console.log(`📥 Join event received:`, peerData);
       
+      // Fix Double Users: Check if this peer ID already exists
+      for (const [existingSocketId, existingPeer] of peers.entries()) {
+        if (existingPeer.id === peerData.id && existingSocketId !== socket.id) {
+          console.log(`🔄 Duplicate peer detected (${peerData.name}), disconnecting old socket: ${existingSocketId}`);
+          const oldSocket = io.sockets.sockets.get(existingSocketId);
+          if (oldSocket) {
+            oldSocket.emit('force-disconnect', { reason: 'เปิดใช้งานในแท็บใหม่' });
+            oldSocket.disconnect();
+          }
+          peers.delete(existingSocketId);
+        }
+      }
+      
+      const clientIp = (socket.handshake.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || socket.handshake.address;
+      
       const peer: PeerWithMode = {
         ...peerData,
-        id: socket.id,
+        // Keep the original peerData.id (from client localStorage) as the unique ID
+        // but the map key remains socket.id for communication
         mode: 'public',
-        ip: (socket.handshake.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || socket.handshake.address
+        ip: clientIp
       };
       
       peers.set(socket.id, peer);
-      console.log(`👤 Peer joined: ${peer.name} (${peer.device}) - Total peers: ${peers.size}`);
+      console.log(`👤 Peer joined: ${peer.name} (${peer.device}) - IP: ${clientIp} - Total peers: ${peers.size}`);
       
+      // Mask IP for network name (e.g., 1.2.3.4 -> 1.2.3.x)
+      const maskedIp = clientIp.includes('.') 
+        ? clientIp.split('.').slice(0, 3).join('.') + '.x'
+        : clientIp.split(':').slice(0, 3).join(':') + ':x';
+
       // Send current mode info
       socket.emit('mode-info', {
         mode: peer.mode,
         roomCode: null,
-        roomPassword: null
+        roomPassword: null,
+        networkName: maskedIp
       });
       
       // Broadcast to all peers
@@ -271,31 +293,15 @@ app.prepare().then(() => {
       });
     });
 
-    // Track relay chunks per fileId for throttling
-    const relayChunkTimers = new Map<string, number>();
-    
     socket.on('relay-chunk', ({ to, fileId, chunk }: { to: string; fileId: string; chunk: ArrayBuffer }) => {
       // Don't forward chunks for rejected relays
       if (rejectedRelays.has(fileId)) {
         return;
       }
       
-      // Per-fileId throttle เพื่อไม่ให้ server ทำงานหนักเกินไป
-      // แต่ไม่ drop chunks (เก็บ queue แทน)
-      const lastTime = relayChunkTimers.get(fileId) || 0;
-      const now = Date.now();
-      
-      if (now - lastTime < RELAY_CHUNK_THROTTLE) {
-        // Delay this chunk slightly instead of dropping it
-        setTimeout(() => {
-          io.to(to).emit('relay-chunk', { fileId, chunk });
-        }, RELAY_CHUNK_THROTTLE);
-      } else {
-        // Forward immediately
-        io.to(to).emit('relay-chunk', { fileId, chunk });
-      }
-      
-      relayChunkTimers.set(fileId, now);
+      // Forward immediately without setTimeout. Client already throttles sending
+      // and receiver buffers using memory or disk. Server acts as a pure passthrough.
+      io.to(to).emit('relay-chunk', { fileId, chunk });
     });
 
     socket.on('relay-end', ({ to, fileId }: { to: string; fileId: string }) => {

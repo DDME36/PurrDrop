@@ -77,6 +77,28 @@ export function ErrorModal({ show, error, context, onRetry, onClose }: ErrorModa
           </div>
         )}
 
+        {/* Troubleshoot Guide */}
+        {(error.type === 'webrtc' || error.type === 'connection' || error.type === 'timeout') && (
+          <div className="troubleshoot-guide">
+            <details>
+              <summary>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                วิธีแก้ไขเบื้องต้น
+              </summary>
+              <ul>
+                <li>ปิด/เปิด WiFi หรือสลับไปใช้เน็ตมือถือ</li>
+                <li>หากเปิด VPN หรือ AdBlocker ให้ลองปิดชั่วคราว</li>
+                <li>ลองใช้ "โหมด Private" หรือ "โหมด WiFi" แทน "โหมด Public"</li>
+                <li>ตรวจสอบว่าเครื่องปลายทางยังเปิดหน้าเว็บอยู่หรือไม่</li>
+              </ul>
+            </details>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="modal-actions">
           {error.canRetry && onRetry && (
@@ -188,6 +210,52 @@ export function ErrorModal({ show, error, context, onRetry, onClose }: ErrorModa
 
         .error-context strong {
           color: var(--text-secondary);
+        }
+
+        .troubleshoot-guide {
+          margin-bottom: 16px;
+          text-align: left;
+        }
+
+        .troubleshoot-guide details {
+          background: rgba(0, 0, 0, 0.03);
+          border-radius: 12px;
+          overflow: hidden;
+        }
+
+        .troubleshoot-guide summary {
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text-primary);
+          padding: 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          user-select: none;
+        }
+
+        .troubleshoot-guide summary svg {
+          stroke: var(--text-secondary);
+        }
+
+        .troubleshoot-guide summary:hover {
+          background: rgba(0, 0, 0, 0.02);
+        }
+
+        .troubleshoot-guide ul {
+          margin: 0;
+          padding: 0 12px 12px 32px;
+          font-size: 13px;
+          color: var(--text-secondary);
+        }
+
+        .troubleshoot-guide li {
+          margin-bottom: 6px;
+        }
+
+        .troubleshoot-guide li:last-child {
+          margin-bottom: 0;
         }
 
         .error-details {
