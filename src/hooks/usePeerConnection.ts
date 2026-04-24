@@ -1194,6 +1194,13 @@ export function usePeerConnection() {
       }
     });
 
+    // Handle server keep-alive (prevent Render Free Tier sleep)
+    socket.on('server-keep-alive', ({ timestamp }: { timestamp: number }) => {
+      console.log('💓 Keep-alive received from server');
+      // Respond with pong to confirm client is alive
+      socket.emit('client-pong', { timestamp: Date.now() });
+    });
+
     socket.on('reconnect_failed', () => {
       console.log('❌ Socket reconnection failed');
       setConnectionStatus('disconnected');

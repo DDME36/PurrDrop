@@ -74,6 +74,83 @@ app.prepare().then(() => {
   const STALE_PEER_INTERVAL = 60 * 1000; // Check for stale peers every 60s
   const RELAY_CHUNK_THROTTLE = 10; // ms - throttle relay chunks
 
+  // Rate limiting: Track events per socket (Memory-efficient for Free Tier)
+  // Only track recent events, auto-cleanup old entries
+  const rateLimitMap = new Map<string, { 
+    join: number; // Last join timestamp
+    fileOffer: number; // Last file offer timestamp
+    rtcOffer: number; // Last RTC offer timestamp
+    joinCount: number; // Count in current window
+    fileOfferCount: number;
+    rtcOfferCount: number;
+  }>();
+  
+  const RATE_LIMITS = {
+    join: { max: 3, window: 60000 }, // 3 joins per minute (reduced for free tier)
+    fileOffer: { max: 5, window: 60000 }, // 5 file offers per minute (reduced)
+    rtcOffer: { max: 10, window: 60000 }, // 10 RTC offers per minute (reduced)
+  };
+
+  // Rate limit checker (Memory-efficient version)
+  function checkRateLimit(socketId: string, eventType: 'join' | 'fileOffer' | 'rtcOffer'): boolean {
+    const now = Date.now();
+    let limits = rateLimitMap.get(socketId);
+    
+    if (!limits) {
+      limits = { 
+        join: now, 
+        fileOffer: now, 
+        rtcOffer: now,
+        joinCount: 0,
+        fileOfferCount: 0,
+        rtcOfferCount: 0
+      };
+      rateLimitMap.set(socketId, limits);
+    }
+    
+    const config = RATE_LIMITS[eventType];
+    const lastTime = limits[eventType];
+    const countKey = `${eventType}Count` as keyof typeof limits;
+    
+    // Reset counter if window expired
+    if (now - lastTime > config.window) {
+      limits[eventType] = now;
+      limits[countKey] = 1;
+      return true;
+    }
+    
+    // Check if limit exceeded
+    if (limits[countKey] >= config.max) {
+      console.warn(`⚠️ Rate limit exceeded for ${socketId}: ${eventType}`);
+      return false;
+    }
+    
+    // Increment counter
+    limits[countKey]++;
+    return true;
+  }
+  
+  // Clean up rate limit map periodically (prevent memory leak)
+  setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [socketId, limits] of rateLimitMap.entries()) {
+      // Remove if all windows expired and socket not connected
+      const allExpired = 
+        (now - limits.join > RATE_LIMITS.join.window) &&
+        (now - limits.fileOffer > RATE_LIMITS.fileOffer.window) &&
+        (now - limits.rtcOffer > RATE_LIMITS.rtcOffer.window);
+      
+      if (allExpired && !io.sockets.sockets.has(socketId)) {
+        rateLimitMap.delete(socketId);
+        cleaned++;
+      }
+    }
+    if (cleaned > 0) {
+      console.log(`🧹 Cleaned ${cleaned} rate limit entries`);
+    }
+  }, 5 * 60 * 1000); // Clean every 5 minutes
+
   // Helper: Find socket.id from peer.id
   function findSocketIdByPeerId(peerId: string): string | null {
     for (const [socketId, peer] of peers.entries()) {
@@ -95,6 +172,15 @@ app.prepare().then(() => {
     console.log(`📡 Registered events: join, set-mode, rtc-*, file-*, relay-*, text-offer, disconnect`);
 
     socket.on('join', (peerData: Peer) => {
+      // Rate limiting
+      if (!checkRateLimit(socket.id, 'join')) {
+        socket.emit('rate-limit-exceeded', { 
+          event: 'join', 
+          message: 'คุณพยายามเชื่อมต่อบ่อยเกินไป กรุณารอสักครู่' 
+        });
+        return;
+      }
+      
       if (dev) console.log(`📥 Join event received:`, peerData);
       
       // Fix Double Users: Check if this peer ID already exists
@@ -197,6 +283,12 @@ app.prepare().then(() => {
 
     // WebRTC signaling
     socket.on('rtc-offer', ({ to, offer }: { to: string; offer: RTCSessionDescriptionInit }) => {
+      // Rate limiting
+      if (!checkRateLimit(socket.id, 'rtcOffer')) {
+        console.warn(`⚠️ Rate limit exceeded for rtc-offer from ${socket.id}`);
+        return;
+      }
+      
       const targetSocketId = findSocketIdByPeerId(to);
       if (!targetSocketId) {
         console.error(`❌ rtc-offer: Target peer not found: ${to}`);
@@ -237,6 +329,28 @@ app.prepare().then(() => {
 
     // File transfer signaling
     socket.on('file-offer', ({ to, file, fileId }: { to: string; file: { name: string; size: number; type: string }; fileId: string }) => {
+      // Rate limiting
+      if (!checkRateLimit(socket.id, 'fileOffer')) {
+        socket.emit('rate-limit-exceeded', { 
+          event: 'file-offer', 
+          message: 'คุณส่งไฟล์บ่อยเกินไป กรุณารอสักครู่' 
+        });
+        return;
+      }
+      
+      // Payload validation
+      if (!file || !file.name || typeof file.size !== 'number' || !fileId) {
+        console.error('❌ Invalid file-offer payload');
+        socket.emit('file-error', { error: 'ข้อมูลไฟล์ไม่ถูกต้อง' });
+        return;
+      }
+      
+      // File size validation (max 2GB)
+      if (file.size > 2 * 1024 * 1024 * 1024) {
+        socket.emit('file-error', { error: 'ไฟล์ใหญ่เกิน 2GB' });
+        return;
+      }
+      
       const fromPeer = peers.get(socket.id);
       if (!fromPeer) return;
       
@@ -346,15 +460,39 @@ app.prepare().then(() => {
       });
     });
 
-    socket.on('relay-chunk', ({ to, fileId, chunk }: { to: string; fileId: string; chunk: ArrayBuffer }) => {
+    socket.on('relay-chunk', ({ to, fileId, chunk }: { to: string; fileId: string; chunk: ArrayBuffer }, ack?: (success: boolean) => void) => {
       // Don't forward chunks for rejected relays
       if (rejectedRelays.has(fileId)) {
+        if (ack) ack(false);
         return;
       }
       
-      // Forward immediately without setTimeout. Client already throttles sending
-      // and receiver buffers using memory or disk. Server acts as a pure passthrough.
-      io.to(to).emit('relay-chunk', { fileId, chunk });
+      // Render Free Tier: Limit chunk size to prevent memory overflow
+      const MAX_CHUNK_SIZE = 128 * 1024; // 128KB max per chunk
+      if (chunk.byteLength > MAX_CHUNK_SIZE) {
+        console.error(`❌ Relay chunk too large: ${chunk.byteLength} bytes (max ${MAX_CHUNK_SIZE})`);
+        socket.emit('relay-error', { 
+          fileId, 
+          error: 'Chunk size เกินขนาดที่กำหนด',
+          suggestedAction: 'ลดขนาด chunk หรือใช้ P2P แทน'
+        });
+        if (ack) ack(false);
+        return;
+      }
+      
+      // Backpressure: Check if receiver socket is still connected and not overwhelmed
+      const receiverSocket = io.sockets.sockets.get(to);
+      if (!receiverSocket || !receiverSocket.connected) {
+        console.error(`❌ Relay chunk dropped: Receiver ${to} not connected`);
+        if (ack) ack(false);
+        return;
+      }
+      
+      // Forward chunk with acknowledgment for backpressure control
+      receiverSocket.emit('relay-chunk', { fileId, chunk }, (receiverAck: boolean) => {
+        // Receiver confirms it processed the chunk
+        if (ack) ack(receiverAck !== false);
+      });
     });
 
     socket.on('relay-end', ({ to, fileId }: { to: string; fileId: string }) => {
@@ -384,8 +522,14 @@ app.prepare().then(() => {
 
     // Text message
     socket.on('text-offer', ({ to, text }: { to: string; text: string }) => {
+      // Payload validation
       if (typeof text !== 'string' || text.length > 1_000_000) {
         socket.emit('text-error', { error: 'ข้อความใหญ่เกินไป (สูงสุด 1MB)' });
+        return;
+      }
+      
+      if (!to || typeof to !== 'string') {
+        socket.emit('text-error', { error: 'ข้อมูลผู้รับไม่ถูกต้อง' });
         return;
       }
       
@@ -411,6 +555,9 @@ app.prepare().then(() => {
     socket.on('disconnect', (reason) => {
       const peer = peers.get(socket.id);
       if (dev) console.log(`❌ Client disconnected: ${socket.id} - Reason: ${reason} - Had peer data: ${!!peer}`);
+      
+      // Clean up rate limit tracking
+      rateLimitMap.delete(socket.id);
       
       if (peer) {
         console.log(`👋 Peer left: ${peer.name} - Remaining peers: ${peers.size - 1}`);
@@ -529,6 +676,20 @@ app.prepare().then(() => {
     }
   }, STALE_PEER_INTERVAL);
 
+  // ─── Keep-Alive for Render Free Tier (prevent sleep) ───
+  // Render Free Tier sleeps after 15 minutes of inactivity
+  // Send keep-alive every 14 minutes to prevent sleep
+  const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000; // 14 minutes
+  setInterval(() => {
+    const clientCount = io.engine.clientsCount;
+    if (clientCount > 0) {
+      io.emit('server-keep-alive', { timestamp: Date.now() });
+      console.log(`💓 Keep-alive sent to ${clientCount} clients (prevent Render sleep)`);
+    } else {
+      console.log('💤 No clients connected, allowing Render to sleep');
+    }
+  }, KEEP_ALIVE_INTERVAL);
+
   httpServer.listen(port, hostname, () => {
     console.log(`🚀 Server running on http://${hostname}:${port}`);
     console.log(`✅ Ready to accept connections`);
@@ -554,6 +715,27 @@ app.prepare().then(() => {
   process.on('SIGINT', () => {
     console.log('⚠️ SIGINT received, shutting down...');
     process.exit(0);
+  });
+
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (err) => {
+    console.error('💥 Uncaught Exception:', err);
+    console.error('Stack:', err.stack);
+    
+    // Attempt graceful shutdown
+    io.emit('server-shutdown', { reason: 'Server error - restarting' });
+    
+    setTimeout(() => {
+      console.log('⚠️ Forcing shutdown after uncaught exception');
+      process.exit(1);
+    }, 5000);
+  });
+
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 Unhandled Rejection at:', promise);
+    console.error('Reason:', reason);
+    // Don't exit on unhandled rejection, just log it
   });
 }).catch((err) => {
   console.error('❌ Error starting server:', err);
