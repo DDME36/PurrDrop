@@ -1852,7 +1852,10 @@ textarea,
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
   text-align: center;
 }
 
@@ -7248,4 +7251,23 @@ button.peer-select-item.selected {
     font-size: 10px;
     padding-inline: 8px;
   }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transfer-wave,
+  .transfer-emoji,
+  .transfer-progress-glow {
+    animation: none !important;
+  }
+}
+
+.peer-card.temporarily-offline {
+  opacity: 0.5;
+  pointer-events: none;
+  filter: grayscale(40%);
+  transition: opacity 0.3s ease, filter 0.3s ease;
 }

@@ -7,7 +7,7 @@ interface TransferProgressProps {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: 'pending' | 'connecting' | 'sending' | 'receiving' | 'complete' | 'saving' | 'error';
+  status: 'pending' | 'preparing' | 'connecting' | 'sending' | 'confirming' | 'receiving' | 'saving' | 'complete' | 'error';
   emoji: string;
   peerName: string;
   connectionType?: ConnectionType;
@@ -44,6 +44,8 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
   const speedHistoryRef = useRef<number[]>([]);
   const minDisplayTimeRef = useRef<number | null>(null);
 
+  const displayProgressVal = (status === 'saving' || status === 'confirming' || status === 'complete') ? 100 : displayProgress;
+
   // Initialize time properly once mounted to avoid pure render issues
   useEffect(() => {
     if (lastUpdateRef.current.time === 0) {
@@ -60,6 +62,9 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
 
   // Smooth progress animation
   useEffect(() => {
+    if (status === 'saving' || status === 'confirming' || status === 'complete') {
+      return;
+    }
     const animate = () => {
       setDisplayProgress(prev => {
         const diff = progress - prev;
@@ -69,7 +74,7 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
     };
     const id = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(id);
-  }, [progress]);
+  }, [progress, status]);
 
   // Handle completion with minimum display time
   useEffect(() => {
@@ -160,17 +165,20 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
   if (!isVisible) return null;
 
   const statusConfig = {
-    pending: { text: 'รอการยืนยัน...', icon: 'waiting', color: 'var(--accent-lavender)' },
-    connecting: { text: 'กำลังเชื่อมต่อ...', icon: 'waiting', color: 'var(--accent-lavender)' },
-    sending: { text: 'กำลังส่ง', icon: 'upload', color: 'var(--accent-mint)' },
-    receiving: { text: 'กำลังรับ', icon: 'download', color: 'var(--accent-peach)' },
-    saving: { text: 'รอบันทึกไฟล์...', icon: 'save', color: 'var(--accent-lavender)' },
-    complete: { text: 'เสร็จแล้ว!', icon: 'check', color: 'var(--accent-mint)' },
-    error: { text: 'ผิดพลาด', icon: 'x', color: '#ff6b6b' },
+    pending: { text: 'ส่งคำขอแล้ว', icon: 'waiting', color: 'var(--accent-lavender)', detail: `กำลังรอผู้รับกดรับไฟล์` },
+    preparing: { text: 'กำลังเตรียมพื้นที่บันทึก', icon: 'waiting', color: 'var(--accent-lavender)', detail: 'กรุณาเลือกตำแหน่งก่อนเริ่มรับไฟล์' },
+    connecting: { text: 'กำลังเชื่อมต่อ', icon: 'waiting', color: 'var(--accent-lavender)', detail: 'กำลังสร้างช่องทางส่งไฟล์โดยตรง' },
+    sending: { text: 'กำลังส่งไฟล์', icon: 'upload', color: 'var(--accent-mint)', detail: 'อย่าปิดหน้านี้จนกว่าจะส่งเสร็จ' },
+    confirming: { text: 'ส่งครบแล้ว', icon: 'waiting', color: 'var(--accent-lavender)', detail: 'กำลังรอผู้รับตรวจสอบไฟล์' },
+    receiving: { text: 'กำลังรับไฟล์', icon: 'download', color: 'var(--accent-peach)', detail: 'อย่าปิดหน้าจอระหว่างรับไฟล์' },
+    saving: { text: 'กำลังเตรียมไฟล์', icon: 'save', color: 'var(--accent-lavender)', detail: 'ได้รับข้อมูลครบแล้ว กำลังรวมไฟล์' },
+    complete: { text: 'เสร็จเรียบร้อย', icon: 'check', color: 'var(--accent-mint)', detail: 'ไฟล์พร้อมใช้งานแล้ว' },
+    error: { text: 'ผิดพลาด', icon: 'x', color: '#ff6b6b', detail: 'การเชื่อมต่อล้มเหลว' },
   };
 
   const config = statusConfig[status];
-  const isActive = status === 'pending' || status === 'connecting' || status === 'sending' || status === 'receiving' || status === 'saving';
+  const isActive = status === 'pending' || status === 'preparing' || status === 'connecting' || status === 'sending' || status === 'confirming' || status === 'receiving' || status === 'saving';
+  const showProgress = status === 'sending' || status === 'receiving' || status === 'confirming' || status === 'saving';
   const routeInfo = getConnectionRouteInfo(connectionType);
 
   let iconSvg = null;
@@ -240,7 +248,7 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
               {iconSvg}
               {config.text}
             </span>
-            <span className="tmb-percent">{displayProgress.toFixed(0)}%</span>
+            <span className="tmb-percent" style={{ fontVariantNumeric: 'tabular-nums' }}>{displayProgressVal.toFixed(0)}%</span>
           </div>
           <div className="tmb-filename">{fileName}</div>
           {routeInfo && connectionType && (
@@ -250,13 +258,13 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
             <div
               className="tmb-progress-fill"
               style={{
-                width: `${displayProgress}%`,
+                width: `${displayProgressVal}%`,
                 background: `linear-gradient(90deg, ${config.color}, var(--accent-pink))`,
               }}
             />
           </div>
           {isActive && speed > 0 && (
-            <div className="tmb-stats">
+            <div className="tmb-stats" style={{ fontVariantNumeric: 'tabular-nums' }}>
               <span>{formatBytes(speed)}/s</span>
               <span>·</span>
               <span>{formatTime(eta)}</span>
@@ -286,8 +294,6 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
       <div className={`transfer-card ${showSuccess ? 'card-success' : ''} ${isClosing ? 'card-closing' : ''}`}>
         {/* Animated background */}
         <div className="transfer-bg">
-          <div className="transfer-wave" style={{ animationDuration: isActive ? '2s' : '0s' }} />
-          <div className="transfer-wave wave-2" style={{ animationDuration: isActive ? '2.5s' : '0s' }} />
         </div>
 
         {/* Minimize button (only show during active transfer, not during success or error) */}
@@ -327,9 +333,16 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
               </div>
               <div className="transfer-peer-name">{peerName}</div>
 
-              <div className="transfer-status-row">
-                <span className="transfer-status-icon">{iconSvg}</span>
-                <span className="transfer-status-text" style={{ color: config.color }}>{config.text}</span>
+              <div className="transfer-status-row" role="status" aria-live="polite" style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="transfer-status-icon">{iconSvg}</span>
+                  <span className="transfer-status-text" style={{ color: config.color }}>{config.text}</span>
+                </div>
+                {config.detail && (
+                  <div className="transfer-status-detail" style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', textAlign: 'center' }}>
+                    {config.detail}
+                  </div>
+                )}
               </div>
 
               {/* E2E Encryption Indicator */}
@@ -389,40 +402,49 @@ export function TransferProgress({ fileName, fileSize, progress, status, emoji, 
                 </div>
               )}
 
-              <div className="transfer-filename">{fileName}</div>
+              <div className="transfer-filename" title={fileName}>{fileName}</div>
 
-              <div className="transfer-progress-container">
-                <div className="transfer-progress-track">
-                  <div
-                    className="transfer-progress-fill"
-                    style={{
-                      width: `${displayProgress}%`,
-                      background: `linear-gradient(90deg, ${config.color}, var(--accent-pink))`,
-                    }}
-                  />
-                  <div className="transfer-progress-percent">{displayProgress.toFixed(1)}%</div>
-                  {isActive && (
+              {status !== 'preparing' && (
+                <div className="transfer-progress-container">
+                  <div className="transfer-progress-track">
                     <div
-                      className="transfer-progress-glow"
-                      style={{ left: `${displayProgress}%` }}
+                      className="transfer-progress-fill"
+                      style={{
+                        width: `${displayProgressVal}%`,
+                        background: `linear-gradient(90deg, ${config.color}, var(--accent-pink))`,
+                      }}
                     />
-                  )}
-                </div>
-              </div>
-
-              {isActive && fileSize > 0 && (
-                <div className="transfer-stats-clean">
-                  <span>{formatBytes((progress / 100) * fileSize)} / {formatBytes(fileSize)}</span>
-                  <span className="dot-separator">•</span>
-                  <span>{formatBytes(speed)}/s</span>
-                  <span className="dot-separator">•</span>
-                  <span>{formatTime(eta)}</span>
+                    <div className="transfer-progress-percent" style={{ fontVariantNumeric: 'tabular-nums' }}>{displayProgressVal.toFixed(1)}%</div>
+                    {isActive && (
+                      <div
+                        className="transfer-progress-glow"
+                        style={{ left: `${displayProgressVal}%` }}
+                      />
+                    )}
+                  </div>
                 </div>
               )}
 
-              {isActive && onCancel && (
+              {isActive && fileSize > 0 && (
+                !showProgress ? (
+                  <div className="transfer-stats-clean" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <span className="spinner-mini" style={{ width: '12px', height: '12px', borderRadius: '50%', border: '2px solid var(--border-color)', borderTopColor: config.color, animation: 'spin 1s linear infinite' }} />
+                    <span>{config.text}</span>
+                  </div>
+                ) : (
+                  <div className="transfer-stats-clean" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <span>{formatBytes((progress / 100) * fileSize)} / {formatBytes(fileSize)}</span>
+                    <span className="dot-separator">•</span>
+                    <span>{formatBytes(speed)}/s</span>
+                    <span className="dot-separator">•</span>
+                    <span>{formatTime(eta)}</span>
+                  </div>
+                )
+              )}
+
+              {isActive && onCancel && status !== 'saving' && status !== 'confirming' && (
                 <button className="transfer-cancel-btn" onClick={onCancel}>
-                  ยกเลิก
+                  {(status === 'sending' || status === 'receiving') ? 'หยุดการส่ง' : 'ยกเลิก'}
                 </button>
               )}
 

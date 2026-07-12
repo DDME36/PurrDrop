@@ -24,7 +24,7 @@ const MessageIcon = () => (
 );
 
 interface PeerCardProps {
-  peer: Peer;
+  peer: Peer & { temporarilyOffline?: boolean };
   isNew?: boolean;
   onSelect: (peer: Peer) => void;
   onDrop: (peer: Peer, files: FileWithContext[]) => void;
@@ -173,12 +173,12 @@ export function PeerCard({ peer, isNew, onSelect, onDrop }: PeerCardProps) {
   return (
     <div
       ref={cardRef}
-      className={`peer-card ${isNew ? 'entering' : ''} ${showMenu ? 'menu-open' : ''}`}
+      className={`peer-card ${isNew ? 'entering' : ''} ${showMenu ? 'menu-open' : ''} ${peer.temporarilyOffline ? 'temporarily-offline' : ''}`}
       style={{ '--critter-color': peer.critter.color } as React.CSSProperties}
-      onClick={handleCardClick}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      onClick={peer.temporarilyOffline ? undefined : handleCardClick}
+      onDragOver={peer.temporarilyOffline ? undefined : handleDragOver}
+      onDragLeave={peer.temporarilyOffline ? undefined : handleDragLeave}
+      onDrop={peer.temporarilyOffline ? undefined : handleDrop}
       role="button"
       tabIndex={0}
       aria-label={`จัดการกับ ${peer.name}`}

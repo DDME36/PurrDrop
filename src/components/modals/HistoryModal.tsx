@@ -145,6 +145,12 @@ export function HistoryModal({ show, history, onClose, onClear, onRemoveItem }: 
                           {!isText && <span className="history-size-tag">{formatFileSize(record.fileSize)}</span>}
                         </div>
 
+                        {!isText && (
+                          <div className="history-status-tag" style={{ fontSize: '11px', fontWeight: 500, marginTop: '4px', opacity: 0.85, color: record.statusText === 'พร้อมบันทึกในอุปกรณ์' ? 'var(--accent-mint)' : 'var(--text-secondary)' }}>
+                            {record.statusText || (record.direction === 'sent' ? 'ส่งสำเร็จ' : 'รับไฟล์สำเร็จ')}
+                          </div>
+                        )}
+
                         {isText && record.textContent && (
                           <div className="history-preview-box">
                             {record.textContent.substring(0, 80)}{record.textContent.length > 80 ? '...' : ''}

@@ -14,4 +14,5 @@ export { ErrorModal } from './ErrorModal';
 export { IOSDownloadModal } from './IOSDownloadModal';
 export { IOSInstallModal } from './IOSInstallModal';
 export { ScannerModal } from './ScannerModal';
+export { DownloadReadyModal } from './DownloadReadyModal';
 

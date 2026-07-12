@@ -13,6 +13,7 @@ const handler = app.getRequestHandler();
 
 interface Peer {
   id: string;
+  tabId?: string;
   name: string;
   device: string;
   critter: {
@@ -73,6 +74,9 @@ app.prepare().then(() => {
   const rooms = new Map<string, Set<string>>();
   const rejectedRelays = new Set<string>(); // Track rejected relay sessions
   const activeRelays = new Map<string, { startTime: number; from: string; to: string; size: number }>(); // Track active relay sessions
+  const pendingDisconnects = new Map<string, NodeJS.Timeout>();
+  const PEER_DISCONNECT_GRACE_MS = 3000;
+  const replacedSockets = new Set<string>();
   const MAX_PEERS = 50; // ลดลงเพื่อประหยัด memory
   const MAX_CONCURRENT_RELAYS = 3; // จำกัดจำนวน relay พร้อมกัน
   const RELAY_TIMEOUT = 5 * 60 * 1000; // ลดเหลือ 5 นาที
@@ -226,7 +230,7 @@ app.prepare().then(() => {
 
     let chunkCounter = 0;
 
-    socket.on('join', (peerData: Peer) => {
+    socket.on('join', ({ peer: peerData, mode, roomCode, password }: { peer: Peer; mode: 'public' | 'wifi' | 'private'; roomCode?: string; password?: string }) => {
       // Rate limiting
       if (!checkRateLimit(socket.id, 'join')) {
         socket.emit('rate-limit-exceeded', { 
@@ -236,18 +240,37 @@ app.prepare().then(() => {
         return;
       }
       
-      if (dev) console.log(`📥 Join event received:`, peerData);
+      if (dev) console.log(`📥 Join event received:`, peerData, { mode, roomCode });
       
+      const pendingTimer = pendingDisconnects.get(peerData.id);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        pendingDisconnects.delete(peerData.id);
+        console.log(`♻️ Peer ${peerData.id} reconnected within grace period`);
+      }
+
       // Fix Double Users: Check if this peer ID already exists
       for (const [existingSocketId, existingPeer] of peers.entries()) {
         if (existingPeer.id === peerData.id && existingSocketId !== socket.id) {
-          console.log(`🔄 Duplicate peer detected (${peerData.name}), disconnecting old socket: ${existingSocketId}`);
-          const oldSocket = io.sockets.sockets.get(existingSocketId);
-          if (oldSocket) {
-            oldSocket.emit('force-disconnect', { reason: 'เปิดใช้งานในแท็บใหม่' });
-            oldSocket.disconnect();
+          const sameTab = existingPeer.tabId === peerData.tabId;
+          
+          if (sameTab) {
+            console.log(`♻️ Reconnect of same tab detected (${peerData.name}), replacing socket silently: ${existingSocketId} → ${socket.id}`);
+            replacedSockets.add(existingSocketId);
+            peers.delete(existingSocketId);
+            const oldSocket = io.sockets.sockets.get(existingSocketId);
+            if (oldSocket) {
+              oldSocket.disconnect(true);
+            }
+          } else {
+            console.log(`🔄 Duplicate peer detected on another tab (${peerData.name}), disconnecting old socket: ${existingSocketId}`);
+            const oldSocket = io.sockets.sockets.get(existingSocketId);
+            if (oldSocket) {
+              oldSocket.emit('force-disconnect', { reason: 'เปิดใช้งานในแท็บใหม่' });
+              oldSocket.disconnect();
+            }
+            peers.delete(existingSocketId);
           }
-          peers.delete(existingSocketId);
         }
       }
       
@@ -257,19 +280,29 @@ app.prepare().then(() => {
         ...peerData,
         // Keep the original peerData.id (from client localStorage) as the unique ID
         // but the map key remains socket.id for communication
-        mode: 'public',
+        mode: mode || 'public',
+        roomCode: mode === 'private' ? roomCode : undefined,
+        roomPassword: mode === 'private' ? password : undefined,
         ip: clientIp
       };
       
       peers.set(socket.id, peer);
-      console.log(`👤 Peer joined: ${peer.name} (${peer.device}) - IP: ${clientIp} - Total peers: ${peers.size}`);
+      console.log(`👤 Peer joined: ${peer.name} (${peer.device}) - Mode: ${peer.mode} - IP: ${clientIp} - Total peers: ${peers.size}`);
       
+      if (peer.mode === 'private' && peer.roomCode) {
+        socket.join(peer.roomCode);
+        if (!rooms.has(peer.roomCode)) {
+          rooms.set(peer.roomCode, new Set());
+        }
+        rooms.get(peer.roomCode)!.add(socket.id);
+      }
+
       const maskedIp = maskNetworkName(clientIp);
 
       // Send current mode info
       socket.emit('mode-info', {
         mode: peer.mode,
-        roomCode: null,
+        roomCode: peer.roomCode ?? null,
         roomPassword: null,
         networkName: maskedIp
       });
@@ -279,6 +312,9 @@ app.prepare().then(() => {
       
       // Notify others
       socket.broadcast.emit('peer-joined', toPublicPeer(peer));
+
+      // Also ensure everyone gets the updated lists
+      broadcastPeersToAll();
     });
 
     socket.on('set-mode', ({ mode, roomCode, password }: { mode: 'public' | 'wifi' | 'private'; roomCode?: string; password?: string }) => {
@@ -593,6 +629,13 @@ app.prepare().then(() => {
       }, 100);
     });
 
+    socket.on('relay-complete-ack', ({ to, fileId }: { to: string; fileId: string }) => {
+      const targetSocketId = resolveSocketId(to);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('relay-complete-ack', { fileId });
+      }
+    });
+
     // Text message
     socket.on('text-offer', ({ to, text }: { to: string; text: string }) => {
       // Payload validation
@@ -647,6 +690,12 @@ app.prepare().then(() => {
     });
 
     socket.on('disconnect', (reason) => {
+      if (replacedSockets.has(socket.id)) {
+        replacedSockets.delete(socket.id);
+        console.log(`♻️ Ignoring disconnect from replaced socket: ${socket.id}`);
+        return;
+      }
+
       const peer = peers.get(socket.id);
       if (dev) console.log(`❌ Client disconnected: ${socket.id} - Reason: ${reason} - Had peer data: ${!!peer}`);
       
@@ -654,9 +703,9 @@ app.prepare().then(() => {
       rateLimitMap.delete(socket.id);
       
       if (peer) {
-        console.log(`👋 Peer left: ${peer.name} - Remaining peers: ${peers.size - 1}`);
+        // เอา socket เก่าออกจาก internal state ก่อน
+        peers.delete(socket.id);
         
-        // Leave room if in one
         if (peer.roomCode) {
           socket.leave(peer.roomCode);
           rooms.get(peer.roomCode)?.delete(socket.id);
@@ -679,12 +728,24 @@ app.prepare().then(() => {
             activeRelays.delete(fileId);
           }
         }
-        
-        peers.delete(socket.id);
-        socket.broadcast.emit('peer-left', peer.id);
-        
-        // Broadcast updated peer lists to ALL remaining peers
-        broadcastPeersToAll();
+
+        const timer = setTimeout(() => {
+          pendingDisconnects.delete(peer.id);
+          
+          // ตรวจว่า peer reconnect กลับมาแล้วหรือยัง
+          const reconnected = Array.from(peers.values()).some(current => current.id === peer.id);
+          if (reconnected) {
+            console.log(`♻️ Grace period ignore disconnect: Peer ${peer.name} (${peer.id}) reconnected`);
+            return;
+          }
+          
+          console.log(`👋 Peer left after grace period: ${peer.name} (${peer.id})`);
+          
+          io.emit('peer-left', peer.id);
+          broadcastPeersToAll();
+        }, PEER_DISCONNECT_GRACE_MS);
+
+        pendingDisconnects.set(peer.id, timer);
       }
     });
 

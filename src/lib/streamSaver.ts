@@ -3,7 +3,7 @@
 
 export interface StreamWriter {
   write(chunk: ArrayBuffer): Promise<void>;
-  close(): Promise<void>;
+  close(): Promise<Blob | void>;
   abort(): void;
 }
 
@@ -128,48 +128,19 @@ export function createMemoryWriter(
     async close() {
       if (aborted) return;
 
-      // Merge any remaining chunks
       if (currentChunks.length > 0) {
         accumulatedBlobs.push(new Blob(currentChunks));
         currentChunks = [];
         currentChunkBytes = 0;
       }
 
-      // Create final blob from accumulated blobs (memory efficient —
-      // browser just links the existing disk-backed blobs together)
-      const finalBlob = new Blob(accumulatedBlobs, { type: mimeType || 'application/octet-stream' });
-      accumulatedBlobs.length = 0; // Release blob references
+      const finalBlob = new Blob(accumulatedBlobs, {
+        type: mimeType || 'application/octet-stream',
+      });
 
-      const url = URL.createObjectURL(finalBlob);
+      accumulatedBlobs.length = 0;
 
-      // Check if iOS Safari
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-      if (isIOS) {
-        // iOS: open in new tab so user can save
-        const newWindow = window.open(url, '_blank');
-        if (!newWindow) {
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        }
-      } else {
-        // Other browsers: direct download
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-
-      // Keep URL alive for a while for the download to start
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      return finalBlob;
     },
     abort() {
       aborted = true;
@@ -186,26 +157,37 @@ export async function createStreamWriter(
   expectedSize: number,
   onProgress?: (received: number) => void
 ): Promise<StreamWriter> {
-  // For large files (> 50MB), try disk-based approaches first
-  if (expectedSize > 50 * 1024 * 1024) {
-    // 1. Try File System Access API (best: writes directly to disk)
-    const fsWriter = await createFileSystemAccessWriter(filename);
-    if (fsWriter) {
-      console.log('📁 Using File System Access API (direct disk write)');
-      return fsWriter;
-    }
+  const isMobile =
+    typeof navigator !== 'undefined' &&
+    (
+      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    );
 
-    // 2. Try StreamSaver (streams via SW proxy)
-    const ssWriter = await createStreamSaverWriter(filename);
-    if (ssWriter) {
-      console.log('📁 Using StreamSaver for large file');
-      return ssWriter;
-    }
+  // StreamSaver ทำให้วิดีโอบนมือถือถูกมองเป็นไฟล์ทั่วไปได้
+  if (isMobile) {
+    return createMemoryWriter(
+      filename,
+      mimeType,
+      expectedSize,
+      onProgress
+    );
   }
 
-  // 3. Fallback: Chunked memory buffer — merges to Blob every 50MB to save RAM
-  console.log('💾 Using chunked memory buffer for file download');
-  return createMemoryWriter(filename, mimeType, expectedSize, onProgress);
+  if (expectedSize > 50 * 1024 * 1024) {
+    const fsWriter = await createFileSystemAccessWriter(filename);
+    if (fsWriter) return fsWriter;
+
+    const streamSaverWriter = await createStreamSaverWriter(filename);
+    if (streamSaverWriter) return streamSaverWriter;
+  }
+
+  return createMemoryWriter(
+    filename,
+    mimeType,
+    expectedSize,
+    onProgress
+  );
 }
 
 // Check if we should use streaming (for large files)

@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { AdaptiveChunker } from '@/lib/adaptiveChunker';
 import { Peer, assignCritter, getDeviceName, generateCuteName } from '@/lib/critters';
 import { createStreamWriter, shouldUseStreaming, StreamWriter } from '@/lib/streamSaver';
-import { detectImageMimeType, validateFile, downloadBlob, requestWakeLock, releaseWakeLock, ReceivingFile, CONNECTION_TIMEOUT, MAX_RETRIES, RETRY_DELAY, getSelectedConnectionRoute, type ConnectionRouteSnapshot, type ConnectionType } from '@/lib/webrtc';
+import { detectImageMimeType, validateFile, downloadBlob, requestWakeLock, releaseWakeLock, ReceivingFile, CONNECTION_TIMEOUT, MAX_RETRIES, RETRY_DELAY, getSelectedConnectionRoute, type ConnectionRouteSnapshot, type ConnectionType, isMobileDevice, resolveMimeType, sanitizeFilename } from '@/lib/webrtc';
 import { detectDevice, shouldUseRelay } from '@/lib/deviceDetection';
 import { handleError, logError } from '@/lib/errorHandler';
 
@@ -14,6 +14,13 @@ interface PendingFile {
   file: File;
   peer: Peer;
   _timeout?: NodeJS.Timeout;
+}
+
+interface PendingDownload {
+  blob: Blob;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
 }
 
 interface FileOffer {
@@ -34,7 +41,7 @@ interface TransferProgress {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: 'pending' | 'connecting' | 'sending' | 'receiving' | 'complete' | 'saving' | 'error';
+  status: 'pending' | 'preparing' | 'connecting' | 'sending' | 'confirming' | 'receiving' | 'saving' | 'complete' | 'error';
   connectionType?: ConnectionType;
   rtt?: number;
 }
@@ -55,6 +62,7 @@ export type DiscoveryMode = 'public' | 'wifi' | 'private';
 export interface PeerWithMeta extends Peer {
   sameNetwork?: boolean;
   inRoom?: boolean;
+  temporarilyOffline?: boolean;
 }
 
 export function usePeerConnection() {
@@ -72,6 +80,7 @@ export function usePeerConnection() {
   const [transfer, setTransfer] = useState<TransferProgress | null>(null);
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
   const [forceDisconnectReason, setForceDisconnectReason] = useState<string | null>(null);
+  const [pendingDownload, setPendingDownload] = useState<PendingDownload | null>(null);
 
   // Refs for tracking reconnection state across renders
   const discoveryModeRef = useRef<DiscoveryMode>('public');
@@ -100,6 +109,9 @@ export function usePeerConnection() {
   const isOffererRef = useRef<Map<string, boolean>>(new Map());
   const restartAttemptsRef = useRef<Map<string, number>>(new Map());
   const disconnectTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const preparedWritersRef = useRef<Map<string, StreamWriter>>(new Map());
+  const completionResolversRef = useRef<Map<string, { resolve: () => void; reject: (err: Error) => void }>>(new Map());
+  const peerRemovalTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   // Stable refs for callbacks — prevents useEffect from re-running when callbacks change
   const sendFileViaRelayRef = useRef<(peerId: string, file: File, fileId: string, targetPeer: Peer) => Promise<void>>(async () => {});
@@ -112,6 +124,57 @@ export function usePeerConnection() {
 
   const releaseWakeLockFn = useCallback(() => {
     releaseWakeLock();
+  }, []);
+
+  const prepareReceivedFile = useCallback(
+    async (
+      chunksOrBlob: ArrayBuffer[] | Blob,
+      fileName: string,
+      suppliedMimeType: string,
+      expectedSize: number
+    ) => {
+      const mimeType = resolveMimeType(fileName, suppliedMimeType);
+
+      const blob = chunksOrBlob instanceof Blob
+        ? new Blob([chunksOrBlob], { type: mimeType })
+        : new Blob(chunksOrBlob, { type: mimeType });
+
+      if (blob.size !== expectedSize) {
+        throw new Error(
+          `ไฟล์ไม่สมบูรณ์: ได้รับ ${blob.size} จาก ${expectedSize} bytes`
+        );
+      }
+
+      if (isMobileDevice()) {
+        // รอให้ผู้ใช้กดปุ่มเอง เพื่อรักษา user activation
+        setPendingDownload({
+          blob,
+          fileName: sanitizeFilename(fileName),
+          fileSize: blob.size,
+          mimeType,
+        });
+
+        return;
+      }
+
+      await downloadBlob(blob, fileName);
+    },
+    []
+  );
+
+  const savePendingDownload = useCallback(async () => {
+    if (!pendingDownload) return;
+
+    // ฟังก์ชันนี้ต้องถูกเรียกโดยตรงจาก onClick
+    await downloadBlob(
+      pendingDownload.blob,
+      pendingDownload.fileName
+    );
+    setPendingDownload(null);
+  }, [pendingDownload]);
+
+  const dismissPendingDownload = useCallback(() => {
+    setPendingDownload(null);
   }, []);
 
   // Keep refs in sync
@@ -173,29 +236,43 @@ export function usePeerConnection() {
 
           console.log('📨 DataChannel message:', msg.type);
 
+          if (msg.type === 'file-complete-ack') {
+            const resolver = completionResolversRef.current.get(msg.fileId);
+            resolver?.resolve();
+            completionResolversRef.current.delete(msg.fileId);
+            return;
+          }
+
           if (msg.type === 'file-start') {
             const senderPeer = peersRef.current.find(p => p.id === peerId);
             const route = connectionRoutesRef.current.get(peerId);
-            const useStreaming = shouldUseStreaming(msg.size);
 
-            // For large files, try to use streaming
-            let streamWriter: StreamWriter | undefined;
-            if (useStreaming) {
-              console.log(`📁 Large file (${(msg.size / 1024 / 1024).toFixed(1)}MB) - using streaming`);
-              try {
-                streamWriter = await createStreamWriter(msg.name, msg.mimeType, msg.size);
-              } catch (err) {
-                // Streaming not available — will fall back to memory buffer (no size limit)
-                console.log('Streaming not available, using memory buffer:', err);
-              }
-            }
+            const preparedWriter = preparedWritersRef.current.get(msg.fileId);
+            preparedWritersRef.current.delete(msg.fileId);
+
+            // Mobile หรือไฟล์เล็กอาจยังไม่มี writer
+            const streamWriter = preparedWriter ??
+              (
+                shouldUseStreaming(msg.size)
+                  ? await createStreamWriter(
+                      msg.name,
+                      resolveMimeType(msg.name, msg.mimeType),
+                      msg.size
+                    )
+                  : undefined
+              );
 
             receivingFilesRef.current.set(msg.fileId, {
               chunks: [],
-              info: { name: msg.name, size: msg.size, type: msg.mimeType },
+              info: {
+                name: msg.name,
+                size: msg.size,
+                type: resolveMimeType(msg.name, msg.mimeType),
+              },
               streamWriter,
-              useStreaming: !!streamWriter,
+              useStreaming: Boolean(streamWriter),
               received: 0,
+              senderId: peerId,
             });
 
             // Request wake lock when receiving
@@ -217,41 +294,75 @@ export function usePeerConnection() {
           } else if (msg.type === 'file-end') {
             const receiving = receivingFilesRef.current.get(msg.fileId);
             if (receiving) {
-              console.log(`✅ File complete: ${receiving.info.name}`);
+              setTransfer(prev =>
+                prev
+                  ? { ...prev, progress: 100, status: 'saving' }
+                  : null
+              );
 
-              if (receiving.streamWriter) {
-                // Streaming mode - file saved automatically
-                await receiving.streamWriter.close();
-                console.log('📁 Stream closed - file saved');
-                setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
-              } else {
-                // Memory mode - waiting for user to save
-                setTransfer(prev => prev ? { ...prev, progress: 100, status: 'saving' } : null);
-                const blob = new Blob(receiving.chunks, { type: receiving.info.type || 'application/octet-stream' });
-                downloadBlob(blob, receiving.info.name);
-                // Set complete after download triggered
-                setTimeout(() => {
-                  setTransfer(prev => prev ? { ...prev, status: 'complete' } : null);
-                }, 500);
+              try {
+                let completedBlob: Blob | undefined;
+
+                if (receiving.streamWriter) {
+                  const result = await receiving.streamWriter.close();
+
+                  if (result instanceof Blob) {
+                    completedBlob = result;
+                  }
+                } else {
+                  completedBlob = new Blob(receiving.chunks, {
+                    type: resolveMimeType(
+                      receiving.info.name,
+                      receiving.info.type
+                    ),
+                  });
+                }
+
+                // File System Access หรือ StreamSaver บน desktop บันทึกให้แล้ว
+                if (completedBlob) {
+                  await prepareReceivedFile(
+                    completedBlob,
+                    receiving.info.name,
+                    receiving.info.type,
+                    receiving.info.size
+                  );
+                }
+
+                // Send completion ACK back to sender via DataChannel
+                channel.send(JSON.stringify({
+                  type: 'file-complete-ack',
+                  fileId: msg.fileId,
+                  receivedSize: receiving.info.size,
+                }));
+
+                setTransfer(prev =>
+                  prev
+                    ? { ...prev, progress: 100, status: 'complete' }
+                    : null
+                );
+
+                const senderPeer = peersRef.current.find(
+                  peer => peer.id === peerId
+                );
+
+                setTransferResult({
+                  success: true,
+                  fileName: receiving.info.name,
+                  fileSize: receiving.info.size,
+                  peerName: senderPeer?.name || 'เพื่อน',
+                  direction: 'received',
+                });
+              } catch (error) {
+                console.error('Cannot prepare received file:', error);
+
+                setTransfer(prev =>
+                  prev ? { ...prev, status: 'error' } : null
+                );
+              } finally {
+                receivingFilesRef.current.delete(msg.fileId);
+                releaseWakeLockFn();
+                setTimeout(() => setTransfer(null), 1800);
               }
-
-              const senderPeer = peersRef.current.find(p => p.id === peerId);
-              setTransferResult({
-                success: true,
-                fileName: receiving.info.name,
-                fileSize: receiving.info.size,
-                peerName: senderPeer?.name || 'เพื่อน',
-                direction: 'received',
-              });
-
-              receivingFilesRef.current.delete(msg.fileId);
-              // Release wake lock after receive complete
-              if (wakeLockRef.current) {
-                wakeLockRef.current.release();
-                wakeLockRef.current = null;
-              }
-              // Let TransferProgress component handle the display timing
-              setTimeout(() => setTransfer(null), 8000);
             }
           } else if (msg.type === 'text-message') {
             const senderPeer = peersRef.current.find(p => p.id === peerId);
@@ -348,7 +459,7 @@ export function usePeerConnection() {
     };
 
     return channel;
-  }, []);
+  }, [prepareReceivedFile, releaseWakeLockFn]);
 
   // Heartbeat Loop
   useEffect(() => {
@@ -605,13 +716,43 @@ export function usePeerConnection() {
 
     peerConnectionsRef.current.set(peerId, pc);
     return pc;
-  }, [setupDataChannel]);
+  }, [setupDataChannel, triggerIceRestart]);
 
   // Fallback: Send file via Socket.IO Relay
   const sendFileViaRelay = useCallback(async (peerId: string, file: File, fileId: string, targetPeer: Peer) => {
     console.log(`📤 Starting Server Relay transfer to ${peerId} (Fallback)`);
     console.log(`📊 File: ${file.name}, Size: ${file.size}, Type: ${file.type}`);
     console.log(`🔌 Socket connected: ${socketRef.current?.connected}`);
+
+    const emitRelayChunk = (
+      socket: Socket,
+      payload: {
+        to: string;
+        fileId: string;
+        chunk: ArrayBuffer;
+      }
+    ) => {
+      return new Promise<void>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          reject(new Error('ผู้รับไม่ตอบสนองระหว่างรับไฟล์'));
+        }, 15_000);
+
+        socket.emit(
+          'relay-chunk',
+          payload,
+          (success: boolean) => {
+            clearTimeout(timeout);
+
+            if (success === false) {
+              reject(new Error('ผู้รับรับข้อมูลไม่สำเร็จ'));
+              return;
+            }
+
+            resolve();
+          }
+        );
+      });
+    };
 
     setTransfer({
       peerId,
@@ -674,19 +815,30 @@ export function usePeerConnection() {
       const fileSize = file.size;
       let offset = 0;
       let chunkCount = 0;
+      const ACK_EVERY = 8;
 
-      while (offset < fileSize) {
+      for (let index = 0; offset < fileSize; index++) {
         const sliceEnd = Math.min(offset + CHUNK_SIZE, fileSize);
         const chunk = await file.slice(offset, sliceEnd).arrayBuffer();
         
-        socketRef.current.emit('relay-chunk', {
-          to: peerId,
-          fileId,
-          chunk,
-        });
+        const requireAck = index % ACK_EVERY === ACK_EVERY - 1 || sliceEnd === fileSize;
+
+        if (requireAck) {
+          await emitRelayChunk(socketRef.current, {
+            to: peerId,
+            fileId,
+            chunk,
+          });
+        } else {
+          socketRef.current.emit('relay-chunk', {
+            to: peerId,
+            fileId,
+            chunk,
+          });
+        }
         
         chunkCount++;
-        offset += chunk.byteLength;
+        offset = sliceEnd;
 
         // Update progress and yield to UI
         if (offset % (512 * 1024) < CHUNK_SIZE || offset === fileSize) {
@@ -707,12 +859,37 @@ export function usePeerConnection() {
         await new Promise(r => setTimeout(r, 5));
       }
 
+      // Wait for receiver completion ACK (Relay)
+      const completion = new Promise<void>((resolve, reject) => {
+        completionResolversRef.current.set(fileId, { resolve, reject });
+
+        window.setTimeout(() => {
+          if (completionResolversRef.current.has(fileId)) {
+            completionResolversRef.current.delete(fileId);
+            reject(new Error('ไม่ได้รับการยืนยันจากผู้รับ'));
+          }
+        }, 15000);
+      });
+
       // 3. Send end marker
       console.log(`📤 Sending relay-end (${chunkCount} chunks total)`);
       socketRef.current.emit('relay-end', { to: peerId, fileId });
       console.log('✅ relay-end emitted');
 
-      setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
+      setTransfer(prev =>
+        prev
+          ? { ...prev, progress: 100, status: 'confirming' }
+          : null
+      );
+
+      await completion;
+
+      setTransfer(prev =>
+        prev
+          ? { ...prev, status: 'complete' }
+          : null
+      );
+
       setTransferResult({
         success: true,
         fileName: file.name,
@@ -721,7 +898,10 @@ export function usePeerConnection() {
         direction: 'sent',
       });
 
-      setTimeout(() => setTransfer(null), 8000);
+      // Release wake lock after transfer complete
+      releaseWakeLockFn();
+
+      setTimeout(() => setTransfer(null), 1800);
     } catch (err) {
       console.error('❌ Relay transfer error:', err);
       setTransfer(prev => prev ? { ...prev, status: 'error' } : null);
@@ -1009,11 +1189,36 @@ export function usePeerConnection() {
       // Free read buffer
       readBuf = null;
 
+      // Wait for receiver completion ACK (WebRTC)
+      const completion = new Promise<void>((resolve, reject) => {
+        completionResolversRef.current.set(fileId, { resolve, reject });
+
+        window.setTimeout(() => {
+          if (completionResolversRef.current.has(fileId)) {
+            completionResolversRef.current.delete(fileId);
+            reject(new Error('ไม่ได้รับการยืนยันจากผู้รับ'));
+          }
+        }, 15000);
+      });
+
       // Send end marker
       console.log('📤 Sending file-end');
       dc.send(JSON.stringify({ type: 'file-end', fileId }));
 
-      setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
+      setTransfer(prev =>
+        prev
+          ? { ...prev, progress: 100, status: 'confirming' }
+          : null
+      );
+
+      await completion;
+
+      setTransfer(prev =>
+        prev
+          ? { ...prev, status: 'complete' }
+          : null
+      );
+
       setTransferResult({
         success: true,
         fileName: file.name,
@@ -1026,7 +1231,7 @@ export function usePeerConnection() {
       releaseWakeLockFn();
 
       // Let TransferProgress component handle the display timing
-      setTimeout(() => setTransfer(null), 8000);
+      setTimeout(() => setTransfer(null), 1800);
 
     } catch (err) {
       // Enhanced error handling
@@ -1182,6 +1387,12 @@ export function usePeerConnection() {
       localStorage.setItem('critters_session_id', sessionId);
     }
 
+    let tabId = sessionStorage.getItem('purrdrop_tab_id');
+    if (!tabId) {
+      tabId = uuidv4().slice(0, 8);
+      sessionStorage.setItem('purrdrop_tab_id', tabId);
+    }
+
     // Priority: LocalStorage > Generated
     let customName = localStorage.getItem('critters_custom_name');
     if (!customName) {
@@ -1203,6 +1414,7 @@ export function usePeerConnection() {
 
     const peer: Peer = {
       id: sessionId,
+      tabId,
       name: customName,
       device,
       critter,
@@ -1223,7 +1435,12 @@ export function usePeerConnection() {
       console.log('🔌 Socket connected');
       setConnected(true);
       setConnectionStatus('connected');
-      socket.emit('join', peer);
+      socket.emit('join', {
+        peer,
+        mode: discoveryModeRef.current,
+        roomCode: roomCodeRef.current ?? undefined,
+        password: roomPasswordRef.current ?? undefined,
+      });
     });
 
     socket.on('disconnect', () => {
@@ -1258,26 +1475,13 @@ export function usePeerConnection() {
       }
     });
 
-    socket.on('reconnecting', () => {
-      console.log('🔄 Socket reconnecting...');
+    socket.io.on('reconnect_attempt', () => {
+      console.log('🔄 Socket reconnecting_attempt...');
       setConnectionStatus('reconnecting');
     });
 
-    socket.on('reconnect', () => {
-      console.log('✅ Socket reconnected');
-      setConnected(true);
-      setConnectionStatus('connected');
-      socket.emit('join', peer);
-      
-      // Restore previous mode if not public
-      if (discoveryModeRef.current !== 'public') {
-        console.log('🔄 Restoring previous mode state on reconnect:', discoveryModeRef.current);
-        socket.emit('set-mode', {
-          mode: discoveryModeRef.current,
-          roomCode: roomCodeRef.current,
-          password: roomPasswordRef.current
-        });
-      }
+    socket.io.on('reconnect', () => {
+      console.log('✅ Socket reconnected via Manager');
     });
 
     // Handle server keep-alive (prevent Render Free Tier sleep)
@@ -1294,8 +1498,16 @@ export function usePeerConnection() {
 
     socket.on('peers', (peerList: PeerWithMeta[]) => {
       const filtered = peerList.filter(p => p.id !== sessionId);
-      peersRef.current = filtered;
-      setPeers(filtered);
+      
+      setPeers(prev => {
+        const offlinePeers = prev.filter(p => p.temporarilyOffline && !filtered.some(f => f.id === p.id));
+        const merged = [
+          ...filtered.map(f => ({ ...f, temporarilyOffline: false })),
+          ...offlinePeers
+        ];
+        peersRef.current = merged;
+        return merged;
+      });
     });
 
     socket.on('room-info', ({ roomCode: code }: { roomCode: string }) => {
@@ -1332,16 +1544,36 @@ export function usePeerConnection() {
     });
 
     socket.on('peer-joined', (newPeer: PeerWithMeta) => {
-      // ใช้ ref เช็คแทน state เพื่อความแม่นยำ
-      if (peersRef.current.some(p => p.id === newPeer.id)) {
-        return; // มีอยู่แล้ว ไม่ต้อง add
+      const timer = peerRemovalTimersRef.current.get(newPeer.id);
+      if (timer) {
+        clearTimeout(timer);
+        peerRemovalTimersRef.current.delete(newPeer.id);
+        console.log(`♻️ Client grace period: Cancelled removal for peer ${newPeer.name}`);
       }
+
       setPeers(prev => {
-        if (prev.some(p => p.id === newPeer.id)) {
-          return prev;
+        const exists = prev.some(p => p.id === newPeer.id);
+        if (exists) {
+          return prev.map(p =>
+            p.id === newPeer.id
+              ? { ...p, ...newPeer, temporarilyOffline: false }
+              : p
+          );
         }
         return [...prev, newPeer];
       });
+
+      // Update peersRef as well
+      const exists = peersRef.current.some(p => p.id === newPeer.id);
+      if (exists) {
+        peersRef.current = peersRef.current.map(p =>
+          p.id === newPeer.id
+            ? { ...p, ...newPeer, temporarilyOffline: false }
+            : p
+        );
+      } else {
+        peersRef.current = [...peersRef.current, newPeer];
+      }
     });
 
     socket.on('peer-left', (peerId: string) => {
@@ -1367,11 +1599,26 @@ export function usePeerConnection() {
         }
       }
       
-      setPeers(prev => prev.filter(p => p.id !== peerId));
-      peerConnectionsRef.current.get(peerId)?.close();
-      peerConnectionsRef.current.delete(peerId);
-      dataChannelsRef.current.delete(peerId);
-      connectionRoutesRef.current.delete(peerId);
+      setPeers(previous =>
+        previous.map(p =>
+          p.id === peerId
+            ? { ...p, temporarilyOffline: true }
+            : p
+        )
+      );
+
+      const timer = setTimeout(() => {
+        setPeers(previous => previous.filter(p => p.id !== peerId));
+        
+        peerConnectionsRef.current.get(peerId)?.close();
+        peerConnectionsRef.current.delete(peerId);
+        dataChannelsRef.current.delete(peerId);
+        connectionRoutesRef.current.delete(peerId);
+        
+        peerRemovalTimersRef.current.delete(peerId);
+      }, 2000);
+
+      peerRemovalTimersRef.current.set(peerId, timer);
     });
 
     socket.on('peer-updated', (updatedPeer: PeerWithMeta) => {
@@ -1457,7 +1704,6 @@ export function usePeerConnection() {
     });
 
 
-    // --- Relay Fallback Receivers ---
     socket.on('relay-start', async (data: { from: string, fileId: string, name: string, size: number, mimeType: string }) => {
       console.log('📥 Relay start received:', data.name);
       console.log('📊 Relay file info:', {
@@ -1469,10 +1715,11 @@ export function usePeerConnection() {
       
       const senderPeer = peersRef.current.find(p => p.id === data.from);
       
-      const useStreaming = shouldUseStreaming(data.size);
-      let streamWriter: StreamWriter | undefined;
+      const preparedWriter = preparedWritersRef.current.get(data.fileId);
+      preparedWritersRef.current.delete(data.fileId);
       
-      if (useStreaming) {
+      let streamWriter = preparedWriter;
+      if (!streamWriter && shouldUseStreaming(data.size)) {
         console.log(`📁 Large file (${(data.size / 1024 / 1024).toFixed(1)}MB) - using streaming (Relay)`);
         try {
           streamWriter = await createStreamWriter(data.name, data.mimeType, data.size);
@@ -1483,9 +1730,13 @@ export function usePeerConnection() {
 
       receivingFilesRef.current.set(data.fileId, {
         chunks: [],
-        info: { name: data.name, size: data.size, type: data.mimeType },
+        info: {
+          name: data.name,
+          size: data.size,
+          type: resolveMimeType(data.name, data.mimeType),
+        },
         streamWriter,
-        useStreaming: !!streamWriter,
+        useStreaming: Boolean(streamWriter),
         received: 0,
         senderId: data.from
       });
@@ -1511,20 +1762,25 @@ export function usePeerConnection() {
       socket.emit('relay-ready', { to: data.from, fileId: data.fileId });
     });
 
-    socket.on('relay-chunk', async (data: { fileId: string, chunk: ArrayBuffer }) => {
+    socket.on('relay-chunk', async (data: { fileId: string, chunk: ArrayBuffer }, ack?: (success: boolean) => void) => {
       const receiving = receivingFilesRef.current.get(data.fileId);
-      if (!receiving) return;
+      if (!receiving) {
+        ack?.(false);
+        return;
+      }
 
       receiving.received += data.chunk.byteLength;
       
       // Track last chunk time for inactivity timeout
       receiving._lastChunkTime = Date.now();
 
+      let success = true;
       if (receiving.streamWriter) {
         try {
           await receiving.streamWriter.write(new Uint8Array(data.chunk) as unknown as ArrayBuffer);
         } catch (err) {
           console.error('Error writing stream chunk (Relay):', err);
+          success = false;
         }
       } else {
         receiving.chunks.push(data.chunk);
@@ -1535,6 +1791,8 @@ export function usePeerConnection() {
         const progress = Math.round((receiving.received / receiving.info.size) * 100);
         setTransfer(prev => prev ? { ...prev, progress } : null);
       }
+
+      ack?.(success);
     });
 
     socket.on('relay-end', async (data: { fileId: string }) => {
@@ -1573,69 +1831,86 @@ export function usePeerConnection() {
         return;
       }
 
-      if (receiving.streamWriter) {
-        await receiving.streamWriter.close();
-        console.log('📁 Stream closed - file saved (Relay)');
-        setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
-      } else {
-        // Memory mode - save blob
-        console.log('💾 Saving file from memory buffer (Relay)');
-        console.log(`📦 Creating blob with ${receiving.chunks.length} chunks, type: ${receiving.info.type}`);
-        
-        const blob = new Blob(receiving.chunks, { type: receiving.info.type });
-        console.log(`📦 Blob created - Size: ${blob.size}, Type: ${blob.type}`);
-        
-        // Verify blob size matches expected
-        if (blob.size !== receiving.info.size) {
-          console.error(`❌ SIZE MISMATCH: Blob is ${blob.size} bytes, expected ${receiving.info.size} bytes`);
+      try {
+        setTransfer(prev =>
+          prev
+            ? { ...prev, progress: 100, status: 'saving' }
+            : null
+        );
+
+        let completedBlob: Blob | undefined;
+
+        if (receiving.streamWriter) {
+          const result = await receiving.streamWriter.close();
+
+          if (result instanceof Blob) {
+            completedBlob = result;
+          }
         } else {
-          console.log('✅ Size verification passed');
+          completedBlob = new Blob(receiving.chunks, {
+            type: resolveMimeType(
+              receiving.info.name,
+              receiving.info.type
+            ),
+          });
         }
-        
-        // Use downloadBlob helper
-        try {
-          downloadBlob(blob, receiving.info.name);
-          console.log('✅ Download triggered successfully');
-        } catch (err) {
-          console.error('❌ Download failed:', err);
-          // Fallback to manual download
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = receiving.info.name;
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-          }, 100);
+
+        if (completedBlob) {
+          await prepareReceivedFile(
+            completedBlob,
+            receiving.info.name,
+            receiving.info.type,
+            receiving.info.size
+          );
         }
-        
-        setTransfer(prev => prev ? { ...prev, progress: 100, status: 'complete' } : null);
+
+        // Send completion ACK back to sender via Socket.io
+        socket.emit('relay-complete-ack', {
+          to: receiving.senderId,
+          fileId: data.fileId,
+        });
+
+        setTransfer(prev =>
+          prev
+            ? { ...prev, progress: 100, status: 'complete' }
+            : null
+        );
+
+        const senderPeer = peersRef.current.find(p => p.id === receiving.senderId);
+        setTransferResult({
+          success: true,
+          fileName: receiving.info.name,
+          fileSize: receiving.info.size,
+          peerName: senderPeer?.name || 'ไม่ทราบชื่อ',
+          direction: 'received',
+        });
+
+        // Vibrate on complete
+        if (navigator.vibrate) {
+          try {
+            navigator.vibrate([100, 50, 100]);
+          } catch {
+            // ignore
+          }
+        }
+      } catch (error) {
+        console.error('Relay save failed:', error);
+
+        setTransfer(prev =>
+          prev ? { ...prev, status: 'error' } : null
+        );
+      } finally {
+        receivingFilesRef.current.delete(data.fileId);
+        releaseWakeLockFn();
+        setTimeout(() => setTransfer(null), 1800);
       }
+    });
 
-      const senderPeer = peersRef.current.find(p => p.id === receiving.senderId);
-      setTransferResult({
-        success: true,
-        fileName: receiving.info.name,
-        fileSize: receiving.info.size,
-        peerName: senderPeer?.name || 'ไม่ทราบชื่อ',
-        direction: 'received',
-      });
-
-      // Vibrate on complete
-      if (navigator.vibrate) {
-        try {
-          navigator.vibrate([100, 50, 100]);
-        } catch {
-          // ignore
-        }
-      }
-
-      receivingFilesRef.current.delete(data.fileId);
-      releaseWakeLockFn();
-      setTimeout(() => setTransfer(null), 8000);
+    socket.on('relay-complete-ack', (data: { fileId: string }) => {
+      console.log('✅ Received relay-complete-ack for:', data.fileId);
+      const resolver = completionResolversRef.current.get(data.fileId);
+      resolver?.resolve();
+      completionResolversRef.current.delete(data.fileId);
     });
 
     // Handle relay errors (e.g., file too large)
@@ -1784,7 +2059,7 @@ export function usePeerConnection() {
       pendingIceCandidates.clear();
       connectionRoutes.clear();
     };
-  }, [createPeerConnection, flushIceCandidates, releaseWakeLockFn]);
+  }, [createPeerConnection, flushIceCandidates, releaseWakeLockFn, prepareReceivedFile]);
 
   const sendFile = useCallback((peer: Peer, file: File) => {
     try {
@@ -1877,11 +2152,50 @@ export function usePeerConnection() {
     }
   }, []);
 
-  const acceptFile = useCallback(() => {
+  const acceptFile = useCallback(async () => {
     if (!socketRef.current || !fileOffer) return;
-    console.log(`✅ Accepting file: ${fileOffer.file.name}`);
-    socketRef.current.emit('file-accept', { to: fileOffer.from.id, fileId: fileOffer.fileId });
-    setFileOffer(null);
+
+    const { fileId, file } = fileOffer;
+
+    try {
+      // เปิด Save dialog ตอนผู้ใช้กดรับไฟล์โดยตรง
+      if (!isMobileDevice() && shouldUseStreaming(file.size)) {
+        setTransfer({
+          peerId: fileOffer.from.id,
+          peerName: fileOffer.from.name,
+          fileName: file.name,
+          fileSize: file.size,
+          progress: 0,
+          status: 'preparing',
+        });
+
+        const writer = await createStreamWriter(
+          file.name,
+          resolveMimeType(file.name, file.type),
+          file.size
+        );
+
+        preparedWritersRef.current.set(fileId, writer);
+      }
+
+      socketRef.current.emit('file-accept', {
+        to: fileOffer.from.id,
+        fileId,
+      });
+
+      setFileOffer(null);
+    } catch (error) {
+      console.error('Cannot prepare destination:', error);
+
+      setTransfer({
+        peerId: fileOffer.from.id,
+        peerName: fileOffer.from.name,
+        fileName: file.name,
+        fileSize: file.size,
+        progress: 0,
+        status: 'error',
+      });
+    }
   }, [fileOffer]);
 
   const rejectFile = useCallback(() => {
@@ -1983,6 +2297,9 @@ export function usePeerConnection() {
     joinRoom,
     createRoom,
     setMode,
+    pendingDownload,
+    savePendingDownload,
+    dismissPendingDownload,
   };
 }
 

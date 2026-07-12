@@ -9,6 +9,7 @@ export interface TransferRecord {
   success: boolean;
   type?: 'file' | 'text'; // เพิ่มประเภท
   textContent?: string; // เก็บข้อความ
+  statusText?: string; // สถานะการทำงาน
 }
 
 const STORAGE_KEY = 'purrdrop_history';
@@ -77,4 +78,19 @@ export function formatTime(timestamp: number): string {
     return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
   }
   return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+}
+
+export function updateHistoryRecordStatus(fileName: string, fileSize: number, newStatusText: string) {
+  const history = getHistory();
+  const record = history.find(
+    item => item.fileName === fileName && item.fileSize === fileSize && item.direction === 'received'
+  );
+  if (record) {
+    record.statusText = newStatusText;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    } catch (e) {
+      console.error('Failed to save updated history status:', e);
+    }
+  }
 }

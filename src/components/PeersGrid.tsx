@@ -4,7 +4,7 @@ import { Peer } from '@/lib/critters';
 import { PeerCard, FileWithContext } from './PeerCard';
 
 interface PeersGridProps {
-  peers: Peer[];
+  peers: (Peer & { temporarilyOffline?: boolean })[];
   newPeerIds: Set<string>;
   onSelectPeer: (peer: Peer) => void;
   onDropFiles: (peer: Peer, files: FileWithContext[]) => void;

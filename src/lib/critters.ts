@@ -20,6 +20,7 @@ export interface CritterInfo {
 
 export interface Peer {
   id: string;
+  tabId?: string;
   name: string;
   device: string;
   critter: CritterInfo;

@@ -26,6 +26,8 @@ import {
   ScannerModal,
   ErrorModal,
   IOSInstallModal,
+  DownloadReadyModal,
+  ConfirmModal,
 } from '@/components/modals';
 import { useSound } from '@/hooks/useSound';
 import { usePeerConnection } from '@/hooks/usePeerConnection';
@@ -34,7 +36,7 @@ import { useNotification } from '@/hooks/useNotification';
 import { Peer } from '@/lib/critters';
 import { detectImageMimeType } from '@/lib/webrtc';
 import { createZipFile, FileWithContext } from '@/lib/compression';
-import { getHistory, addToHistory, TransferRecord } from '@/lib/transferHistory';
+import { getHistory, addToHistory, TransferRecord, updateHistoryRecordStatus } from '@/lib/transferHistory';
 import { detectNetworkQuality, NetworkQuality } from '@/lib/networkQuality';
 import { usePWA } from '@/hooks/usePWA';
 
@@ -72,6 +74,9 @@ export default function Home() {
     clearTextMessage,
     cancelTransfer,
     setMode,
+    pendingDownload,
+    savePendingDownload,
+    dismissPendingDownload,
   } = usePeerConnection();
 
   const { muted, toggle: toggleMute, play, vibrate } = useSound();
@@ -93,6 +98,7 @@ export default function Home() {
   const [history, setHistory] = useState<TransferRecord[]>([]);
   const [initialModeSet, setInitialModeSet] = useState(false);
   const [networkQuality, setNetworkQuality] = useState<NetworkQuality>('good');
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -281,6 +287,7 @@ export default function Home() {
           success: true,
           type: transferResult.type,
           textContent: transferResult.textContent,
+          statusText: transferResult.direction === 'sent' ? 'ส่งสำเร็จ' : 'รับไฟล์สำเร็จ',
         });
         setTimeout(() => {
           setHistory(getHistory());
@@ -698,6 +705,43 @@ export default function Home() {
         onScan={handleQRScan}
         onClose={() => setShowScannerModal(false)}
       />
+
+      {pendingDownload && (
+        <>
+          <DownloadReadyModal
+            show={true}
+            fileName={pendingDownload.fileName}
+            fileSize={pendingDownload.fileSize}
+            mimeType={pendingDownload.mimeType}
+            onSave={async () => {
+              const name = pendingDownload.fileName;
+              const size = pendingDownload.fileSize;
+              await savePendingDownload();
+              updateHistoryRecordStatus(
+                name,
+                size,
+                'พร้อมบันทึกในอุปกรณ์'
+              );
+              setTimeout(() => {
+                setHistory(getHistory());
+              }, 0);
+            }}
+            onDiscard={() => setShowDiscardConfirm(true)}
+          />
+          <ConfirmModal
+            show={showDiscardConfirm}
+            title="ลบไฟล์ที่รับมา?"
+            message="หากปิดตอนนี้ ไฟล์ที่รับมาจะถูกลบและต้องรับใหม่อีกครั้ง"
+            confirmText="ลบไฟล์"
+            cancelText="ยกเลิก"
+            onConfirm={() => {
+              setShowDiscardConfirm(false);
+              dismissPendingDownload();
+            }}
+            onCancel={() => setShowDiscardConfirm(false)}
+          />
+        </>
+      )}
     </>
   );
 }
